@@ -32,7 +32,7 @@ https://greynoi.se
       Gr3yBOT requires the following python modules:
             For Twitter functionality:
                   - Tweepy
-            For Urban Dictionary:
+            For Urban Dictionary and Weather:
                   - BeautifulSoup
             For Ping functionality:
                   - Slacker
@@ -40,6 +40,8 @@ https://greynoi.se
                   - Wikipedia
             For Cleverbot:
                   - CookieJar
+	    For Weather:
+		  - feedparser
 
       --== IMPORTANT!! ==--
             Make sure you open gr3ybot_settings.py and configure the bot before attempting to run it.
