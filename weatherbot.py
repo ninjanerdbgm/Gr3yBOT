@@ -70,30 +70,47 @@ def getWeather(loc):
 		parsed_clouds = parsed.entries[0]['yweather_condition']
 		parsed_clouds = parsed_clouds['text'].lower()
 	except KeyError:
-		parsed_clouds = "idk"
+		parsed_clouds = "weather"
 	try:
 		parsed_temp = parsed.entries[0]['yweather_condition']
 		parsed_temp = int(parsed_temp['temp'])
 	except (KeyError, ValueError):
-		parsed_temp = "idk"
+		parsed_temp = "a temperature in degrees"
 	try:
 		parsed_humidity = parsed['feed']['yweather_atmosphere']['humidity']
+	except (KeyError, ValueError):
+                parsed_humidity = "some "
+	try:
 		parsed_pressure = parsed['feed']['yweather_atmosphere']['pressure']
+	except (KeyError, ValueError):
+                parsed_pressure = "at least 0"
+	try:
 		parsed_visibility = parsed['feed']['yweather_atmosphere']['visibility']
 	except (KeyError, ValueError):
-		parsed_humidity,parsed_pressure,parsed_visibility = "idk","idk","idk"
+		parsed_visibility = "some crazy number of"
 	try:
 		parsed_sunrise = parsed['feed']['yweather_astronomy']['sunrise'].lower()
-		parsed_sunset = parsed['feed']['yweather_astronomy']['sunset'].lower()
+		if len(parsed_sunrise) < 4: parsed_sunrise = "sometime in the morning, i think,"
 	except (KeyError, ValueError):
-		parsed_sunrise,parsed_sunset = "idk","idk"
+                parsed_sunrise = "sometime in the morning, i think,"
+	try:
+		parsed_sunset = parsed['feed']['yweather_astronomy']['sunset'].lower()
+		if len(parsed_sunset) < 4: parsed_sunset = "just before night"
+	except (KeyError, ValueError):
+		parsed_sunset = "just before night"
 	try:
 		parsed_wind_chill = parsed['feed']['yweather_wind']['chill']
+	except (KeyError, ValueError):
+                parsed_wind_chill = "another temperature in degrees"
+	try:	
 		parsed_wind_speed = parsed['feed']['yweather_wind']['speed']
+	except (KeyError, ValueError):
+                parsed_wind_speed = "an unknown speed in"
+	try:
 		parsed_wind_direction = float(parsed['feed']['yweather_wind']['direction'])
 		parsed_wind_direction = getWindDirection(parsed_wind_direction)
 	except (KeyError, ValueError):
-		parsed_wind_chill,parsed_wind_speed,parsed_wind_direction = "idk","idk","idk"
+		parsed_wind_direction = "some direction"
 
 	weather['location'] = parsed_loc
 	weather['cloudcover'] = parsed_clouds
