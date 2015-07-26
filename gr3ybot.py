@@ -42,6 +42,7 @@ import sys
 from twitbot import *
 from slackbot import *
 from yelpbot import *
+from weatherbot import *
 from os import path
 import random
 import signal
@@ -98,7 +99,8 @@ if len(fightchan) > 0:
 #--
 
 #-- Send a message upon joining the channel
-irc.send ( 'PRIVMSG {0} :hey type %help if youre dumn\r\n'.format(channel, version))
+irc.send ( 'PRIVMSG {0} :hey type %help if youre dumn\r\n'.format(channel))
+if fightchan != defchannel: irc.send ( 'PRIVMSG {0} :llllllets get ready to rumbleeeee orrrr read %fight help if you dont know what im talking abouuuuuuuuuuut\r\n'.format(fightchan))
 #--
 
 #-- Functions
@@ -185,6 +187,7 @@ def matchYouTube(msg):
 
 def join():
 	irc.send('JOIN ' + channel + '\r\n')
+	if fightchan != defchannel: irc.send('JOIN ' + fightchan + '\r\n')
 
 def send(msg):
 	irc.send('PRIVMSG ' + channel + ' :{0}\r\n'.format(msg))
@@ -225,7 +228,7 @@ def jsontitle(data):
 	return title
 
 def jsonurl(data):
-	url = data.split('slug":"')
+	url = data.split('":"')
 	url = url[1].split('",')
 	url = url[0]
 	return "http://www.greynoi.se/podcasts/{0}".format(url)
@@ -329,9 +332,10 @@ def main(joined):
 			break
 	
 		if CHATLOG: log(data)
-	
-		if data.find(server_slug) != -1:
-			join()
+
+		# OLD
+		#if data.find(server_slug) != -1:
+		#	join()
 	
 		if data.find('PING') != -1:
                         #--
@@ -583,6 +587,29 @@ def main(joined):
                                                         privsend("example: {0}".format(example),name)
                                                         privsend("this is where you can get more definitions: {0}".format(url),name)
 						if VERBOSE: log("{0} - {1}\nExample: {2}\nMore Info: {3}".format(word,meaning,example,url))
+
+					# WEATHER
+                                        if info[0].lower() == 'weather':
+                                                degrees = " F"
+                                                try:
+                                                        where = info[1:]
+                                                except IndexError:
+                                                        if special == 0: send("the weather of space is cold and dark")
+                                                        else: usernick = getNick(data); privsend("the weather of space is cold and dark",usernick)
+                                                        continue
+                                                where = " ".join(where)
+                                                where = "".join(c for c in where if c not in ('\n','\r','\t'))
+                                                if VERBOSE: log("Get weather for {0}".format(where))
+                                                weather = getWeather(where)
+                                                if weather == "~*404" or weather is None:
+                                                        if special == 0: send("i dont know where dat iz")
+                                                        else: usernick = getNick(data); privsend("i dont know where dat iz",usernick)
+                                                        if VERBOSE: log("Nothing found.")
+                                                        continue
+                                                if special == 0:
+                                                        send("weather for {0}:".format(weather['location']))
+                                                        send("currently {0} at {1}{2} (feels like {6}{2}). visibility is at {5} miles. humidity is currently {3}%, with an atmospheric pressure of {4}psi".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']))
+                                                        send("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],weather['sunrise'],weather['sunset']))
 		
 					# PODCAST INFO
 					if any(info[0].lower() in s for s in podcast_keywords):
@@ -631,6 +658,7 @@ def main(joined):
 								privsend("  ===  ==  = <location> is optional (default is las vegas), and can be a city, state or a zip code.",name)
 							if WIKIPEDIA_ENABLED: privsend("%wiki/%wikipedia/%lookup/%search <string> -=- search wikipedia for <string> and return a quick summary.", name)
 							if URBANDICT_ENABLED: privsend("%define <word(s)> -=- define stuff from urbandictionary.", name)
+							privsend("%weather <location> -=- get the weather forecast for <location>", name)
 							privsend(" ", name)
 							time.sleep(.5)
 							privsend("%info -=- displays the latest podcast info", name)
