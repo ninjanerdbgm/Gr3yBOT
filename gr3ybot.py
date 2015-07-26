@@ -1451,7 +1451,7 @@ def main(joined):
 								fightsend("stats for {0}:".format(whostats))
 								fightsend("lvl: {0}, atk: {1}, grd: {2}, mag: {3}, mdef: {4}, hp: {5}, xp to next lvl: {6}, wins: {7}".format(checkStats[1],checkStats[2],checkStats[3],checkStats[4],checkStats[5],checkStats[6],checkStats[7],checkStats[8]))
 						
-						elif act[0].lower() == "history":
+						elif act[0].lower() == "history" and FIGHT_HISTORY:
 							name = getNick(data)
 							if VERBOSE: log("Getting fight history for {0}".format(name))
 							fightlog = getHistory(name)
