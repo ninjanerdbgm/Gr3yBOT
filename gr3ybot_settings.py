@@ -75,8 +75,13 @@ WIKIPEDIA_ENABLED = True
 #	fightchan
 #		Set this to the channel you wish to constrain the fights to.
 #		If this is set to None, it defaults to the same as your main channel.
+#	FIGHT_HISTORY
+#		Set this to True if you want people to be able to get a paste
+#		of their last fight posted to Pastebin.  You'll need a Pastebin
+#		API key in order for this to work.
 #fightchan = "#gr3yfights"
 fightchan = None
+FIGHT_HISTORY = True
 
 # Help
 #	help_keywords:
