@@ -40,8 +40,8 @@ https://greynoi.se
                   - Wikipedia
             For Cleverbot:
                   - CookieJar
-	    For Weather:
-		  - feedparser
+            For Weather:
+            	  - feedparser
 
       --== IMPORTANT!! ==--
             Make sure you open gr3ybot_settings.py and configure the bot before attempting to run it.
