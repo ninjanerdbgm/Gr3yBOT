@@ -13,35 +13,35 @@ if __name__ == "__main__":
 def getWindDirection(wind):
 	if wind >= 348.75 or wind < 11.25:
 		return "north"
-	if wind >= 11.25 or wind < 33.75:
+	if wind >= 11.25 and wind < 33.75:
 		return "north-northeast"
-	if wind >= 33.75 or wind < 56.25:
+	if wind >= 33.75 and wind < 56.25:
 		return "northeast"
-	if wind >= 56.25 or wind < 78.75:
+	if wind >= 56.25 and wind < 78.75:
 		return "east-northeast"
-	if wind >= 78.75 or wind < 101.25:
+	if wind >= 78.75 and wind < 101.25:
 		return "east"
-	if wind >= 101.25 or wind < 123.75:
+	if wind >= 101.25 and wind < 123.75:
 		return "east-southeast"
-	if wind >= 123.75 or wind < 146.25:
+	if wind >= 123.75 and wind < 146.25:
 		return "southeast"
-	if wind >= 146.25 or wind < 168.75:
+	if wind >= 146.25 and wind < 168.75:
 		return "south-southeast"
-	if wind >= 168.75 or wind < 191.25:
+	if wind >= 168.75 and wind < 191.25:
 		return "south"
-	if wind >= 191.25 or wind < 213.75:
+	if wind >= 191.25 and wind < 213.75:
 		return "south-southwest"
-	if wind >= 213.75 or wind < 236.25:
+	if wind >= 213.75 and wind < 236.25:
 		return "southwest"
-	if wind >= 236.25 or wind < 258.75:
+	if wind >= 236.25 and wind < 258.75:
 		return "west-southwest"
-	if wind >= 258.75 or wind < 281.25:
+	if wind >= 258.75 and wind < 281.25:
 		return "west"
-	if wind >= 281.25 or wind < 303.75:
+	if wind >= 281.25 and wind < 303.75:
 		return "west-northwest"
-	if wind >= 303.75 or wind < 326.25:
+	if wind >= 303.75 and wind < 326.25:
 		return "northwest"
-	if wind >= 326.25 or wind < 348.75:
+	if wind >= 326.25 and wind < 348.75:
 		return "north-northwest"
 
 def getWeather(loc):
