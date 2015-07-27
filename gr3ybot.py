@@ -453,8 +453,8 @@ def main(joined):
 				
 					# VERSION COMMAND
 					if info[0].lower() == 'version':
-						if special == 0: send("Gr3yBOT by bgm: version {0}".format(version))
-						else: name = getNick(data); privsend("Gr3yBOT by bgm: version {0}".format(version),name)
+						if special == 0: send("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version))
+						else: name = getNick(data); privsend("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),name)
 						if VERBOSE: log("Version: {0}".format(version))
 			
 					# SYNSHOP COMMAND
