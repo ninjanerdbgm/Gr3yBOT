@@ -337,23 +337,26 @@ def main(joined):
 		#if data.find(server_slug) != -1:
 		#	join()
 	
-		if data.find('PING') != -1:
-                        #--
-                        # Since IRC servers send out a PING message at fixed intervals, I use it for timed functions.
-			#
-			# Reset the fight history flood protection...
-			tellinghistory = 0
-                        #
-                        # Check to see if anyone tweeted at the bot...
-                        if TWITTER_ENABLED: checkTwits()
-			#checkReminders()
-                        # Have a 30% chance to shift the XOR bits in the fightbot RNG (this is to try to make it more random)
-                        if (random.randint(1,99193) * int(time.time())) % 100 < 30:
-                                shift = xOrShift()
-                                if VERBOSE: log("XOR bits shifted to: {0}".format(shift))
-                        #
-                        # And finally, return the PONG message to keep the bot alive.
-                        irc.send('PONG ' + data.split()[1] + '\r\n')
+		try:
+			if data.find('PING') != -1:
+	                        #--
+	                        # Since IRC servers send out a PING message at fixed intervals, I use it for timed functions.
+				#
+				# Reset the fight history flood protection...
+				tellinghistory = 0
+	                        #
+	                        # Check to see if anyone tweeted at the bot...
+	                        if TWITTER_ENABLED: checkTwits()
+				#checkReminders()
+	                        # Have a 30% chance to shift the XOR bits in the fightbot RNG (this is to try to make it more random)
+	                        if (random.randint(1,99193) * int(time.time())) % 100 < 30:
+	                                shift = xOrShift()
+	                                if VERBOSE: log("XOR bits shifted to: {0}".format(shift))
+	                        #
+	                        # And finally, return the PONG message to keep the bot alive.
+	                        irc.send('PONG ' + data.split()[1] + '\r\n')
+		except UnicodeDecodeError:
+                        continue
 	
 		if data.find('#') != -1:
 			action = data.split('#')[0]
