@@ -1270,7 +1270,7 @@ def main(joined):
 							f.close()
 							if readytofight == 1:
 								f = open('memos', 'a')
-		                                                f.write("{0}[-]{1}[-]Wanna fight? Come to {2) and type '%fight yes' or '%fight no'\n".format(fighter,challenger,fightchan))
+		                                                f.write("{0}[-]{1}[-]Wanna fight? Come to {2} and type '%fight yes' or '%fight no'\n".format(fighter,challenger,fightchan))
                 		                                f.close()
 								f = open('fightsongoing','a')
 								stopper = ''
