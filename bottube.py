@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from gr3ybot_settings import YOUTUBE_LINKS,YOUTUBE_DEVELOPER_KEY,YOUTUBE_API_SERVICE_NAME,YOUTUBE_API_VERSION
+from gr3ybot_settings import *
 from apiclient.discovery import build
 import urllib
 import urllib2
