@@ -1067,7 +1067,7 @@ def main(joined):
 							if search != 0: 
 								search = (search[:497] + '...') if len(search) > 497 else search
 								search = search.lower()
-								search = "".join(c for c in search if c not in ('\'','"','!','?',':',';'))
+								search = "".join(a for a in search if (a.isalnum() or a in (",",".","'","\"","?","!","@","#","$","%","^","&","*","(",")","_","+","=","-","\\","|","]","}","{","[",";",":","/",">","<","`","~"," ")))
 								send("see also: {0}".format(search)) if special == 0 else privsend("see also: {0}".format(search),sender)
 							if VERBOSE: log("{0}\nMore Info: {1}\nSee Also: {2}".format(desc,url,search))
 					
