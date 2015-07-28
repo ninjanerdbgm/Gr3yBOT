@@ -1,4 +1,10 @@
-#-- Please configure these general settings:
+# Let's make sure this is configured.
+import sys
+import time
+
+#===============================================#
+# -- Please configure the following settings -- #
+#===============================================#
 
 ## timeformat indicates how the date will appear in the logs.
 timeformat = "%m/%d/%y %H:%M:%S"
@@ -41,9 +47,6 @@ server_slug = 'Welcome to freenode - supporting the free and open source'
 #       FIGHT_VERBOSE
 #               Set this to True if you want to see the fight dice rolls and
 #               damage calculations.
-#       YOUTUBE_LINKS
-#               Set this to True to have the bot auto-retrieve info about
-#               YouTube links posted in chat.
 LOGFILE = 'bot.log'
 ECHO_LOG = True
 
@@ -215,3 +218,65 @@ YOUTUBE_API_VERSION = 'v3'
 
 # All finished?  If so, set the following variable to True:
 CONFIGURED = False
+
+if not CONFIGURED:
+        print("\n===========")
+        print("You haven't yet configured the bot.  Please open gr3ybot_settings.py and do so now.")
+        print("If you have configured the bot and are still seeing this message, please set the CONFIGURED variable to True.")
+        sys.exit()
+
+affirmative = ["yes","ya","y","yep","sure","ok","sounds good","fine","uh huh","yea","yeah"]
+
+if CONFIGURED:
+        print("\n==========")
+        print("Validating configuration.  Please wait...\n")
+        time.sleep(1)
+        if FIGHT_HISTORY and len(PASTEBIN_DEV_KEY) < 5:
+                print("You've enabled Fight History, but didn't supply a valid Pastebin API dev key.")
+                print("Do you want to disable Fight History?")
+                if raw_input().lower() in affirmative:
+                        FIGHT_HISTORY = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
+        if YOUTUBE_LINKS and len(YOUTUBE_DEVELOPER_KEY) < 5:
+                print("You've enabled YouTube Link Translation, but didn't supply a valid YouTube API dev key.")
+                print("Do you want to disable YouTube Link Translation?")
+                if raw_input().lower() in affirmative:
+                        YOUTUBE_LINKS = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
+        if TWITTER_ENABLED and (len(TWIT_CONSUMER_KEY) < 5 or len(TWIT_ACCESS_KEY) < 5 or len(TWIT_CONSUMER_SECRET) < 5 or len(TWIT_ACCESS_SECRET) < 5):
+                print("You've enabled Twitter functions, but didn't supply valid Twitter API keys.")
+                print("Do you want to disable Twitter functionality?")
+                if raw_input().lower() in affirmative:
+                        TWITTER_ENABLED = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
+        if YELP_ENABLED and (len(YELP_CONSUMER_KEY) < 5 or len(YELP_CONSUMER_SECRET) < 5 or len(YELP_TOKEN) < 5 or len(YELP_TOKEN_SECRET) < 5):
+                print("You've enabled Yelp functionality, but didn't supply valid Yelp API keys.")
+                print("Do you want to disable Yelp functionality?")
+                if raw_input().lower() in affirmative:
+                        YELP_ENABLED = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
+        if PING_ENABLED and len(SLACK_API_TOKEN) < 5:
+                print("You've enabled Ping functionality, but didn't supply a valid Slack API token.")
+                print("Do you want to disable Ping functionality?")
+                if raw_input().lower() in affirmative:
+                        PING_ENABLED = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
+
+        print("Current settings:")
+        print("Fight History: {0}\nYouTube Links: {1}\nTwitter functions: {2}".format(FIGHT_HISTORY,YOUTUBE_LINKS,TWITTER_ENABLED))
+        print("Yelp: {0}\nPing: {1}\nUrban Dictionary: {2}\nWikipedia: {3}".format(YELP_ENABLED,PING_ENABLED,URBANDICT_ENABLED,WIKIPEDIA_ENABLED))
+        if raw_input("\nIs this look okay? (y/n): ").lower() in affirmative:
+                pass
+        else:
+                print("User halted. Exiting now...")
+                sys.exit()
