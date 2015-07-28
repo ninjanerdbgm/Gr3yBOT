@@ -47,6 +47,7 @@ def getVideo(term):
 			results.append("{0}".format(search_result["snippet"]["title"].encode('utf-8')))
 			break
 	url='https://www.googleapis.com/youtube/v3/videos?id={0}&part=contentDetails&key={1}'.format(term,YOUTUBE_DEVELOPER_KEY)
+	results[0] = "".join(a for a in results[0] if (a.isalnum() or a in (",",".","'","\"","?","!","@","#","$","%","^","&","*","(",")","_","+","=","-","\\","|","]","}","{","[",";",":","/",">","<","`","~"," ")))
 	lists = urllib2.urlopen(url, None)
 	page = json.loads(lists.read())
 	duration = page["items"][0]
