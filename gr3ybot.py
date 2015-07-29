@@ -826,7 +826,7 @@ def main(joined):
 				                        for tweet in mag:
 				                        	try: # Is the message a retweet?  Let's grab it and specify that it's an RT
 		                                                        mag = tweet.retweeted_status.text
-		                                                        getrt = tweet.text.encode('utf-8') # Encode the message to be safe.
+		                                                        getrt = tweet.text.encode('utf-8','ignore') # Encode the message to be safe.
 		                                                        getrt = getrt.split('@')[1].split(':')[0]
 		                                                        mag = "RT @{0}: {1}".format(getrt,mag)									
 		                                                except AttributeError:
@@ -855,7 +855,7 @@ def main(joined):
 						for tweet in msg:
 							try:
 								msg = tweet.retweeted_status.text
-								getrt = tweet.text.encode('utf-8')
+								getrt = tweet.text.encode('utf-8','ignore')
 								getrt = getrt.split('@')[1].split(':')[0]
 								msg = "RT @{0}: {1}".format(getrt,msg)
 							except AttributeError:
@@ -1767,7 +1767,7 @@ def main(joined):
 	                        for tweet in mag:
 	                        	try:
 	                                	mag = tweet.retweeted_status.text
-	                                        getrt = tweet.text.encode('utf-8')
+	                                        getrt = tweet.text.encode('utf-8','ignore')
 	                                        getrt = getrt.split('@')[1].split(':')[0]
 	                                        mag = "RT @{0}: {1}".format(getrt,mag)
 	                                except AttributeError:
