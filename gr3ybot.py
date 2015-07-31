@@ -140,29 +140,34 @@ def getNick(data):
 	return nick
 
 def getChatters():
-	data = irc.recv(2048)
-	if VERBOSE: log("Call for list of names in {0}".format(channel))
-	if '353' in data:
-		names = data.split('353')[1]
-		names = names.split(':')[1]
-		names = names.split(' ')
-		names = [i.strip('@').strip('\r\n') for i in names]
-		try:
-			names.remove(botname)
-		except ValueError: names = names
-		if VERBOSE:
-			log("People in the channel:")
-			for i in names:
-				log(i)
-	else: names = False
-	return names
+        data = irc.recv(512)
+        if VERBOSE: log("Call for list of names in {0}".format(channel))
+        print data
+        names = False
+        if '353' in data:
+                names = data.split('353')[1]
+                names = names.split(':')[1]
+                names = names.split(' ')
+                names = [i.strip('@').strip('\r\n') for i in names]
+                print names
+                try:
+                        names.remove(botname)
+                except ValueError: names = names
+                if VERBOSE:
+                        log("People in the channel:")
+                        for i in names:
+                                log(i)
+        if len(names) == 1:
+                return "lonely"
+        return names
 
 def getRandomPerson():
-	names = getChatters()
-	if not names: return False
-	if creepfactor == 2 and creepperson in names: person = creepperson
-	else: person = names[random.randint(0,len(names) - 1)]
-	return person
+        names = getChatters()
+        print "NAMES: ",names
+        if not names or len(names) == 0: return False
+        if names == "lonely": return "lonely"
+        else: person = names[random.randint(0,len(names) - 1)]
+        return person
 
 def getMessage(data):
 	try:
@@ -1153,13 +1158,18 @@ def main(joined):
                                                                                         fightsend("you were sent an invitation to fight from {0}. type %fight yes to accept or %fight no to decline.".format(p1))
                                                                                 break
                                                                 f.close()
-                                                        if infight == 0:
+							if infight == 0:
                                                                 sendraw("NAMES {0}".format(fightchan))
-								person = getRandomPerson()
-                                                                while person.lower() == name.lower(): person = getRandomPerson()
-                                                                fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
+                                                                person = getRandomPerson()
+                                                                if person == "lonely":
+                                                                        fightsend("youre the only one in this chat. go find some friends.")
+                                                                        continue
+                                                                if person:
+                                                                        while person.lower() == name.lower(): person = getRandomPerson()
+                                                                        fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
+                                                                else: fightsend("you arent fighting anyone. go fight someone.")
                                                                 continue
-							continue
+                                                        continue
 						except:
 							fightsend("i decided not to work today. let bgm know how lazy i am please.")
 							continue
