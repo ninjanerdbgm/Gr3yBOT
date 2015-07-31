@@ -3,7 +3,7 @@
 # FIGHTBOT, by bgm
 # https://greynoi.se
 #
-# This is the brains of the fighting script contained within
+# This is the brains of the fighting script contained withing
 # Gr3yBOT.py.  All of the algorithms contained below were 
 # developed solely by bgm, with the exception of the XOrShift
 # function. If you end up using these, please give me credit
@@ -477,18 +477,14 @@ def xOrShift():
 	XA = XB + XA
 	XB = XC + XC
 	XC = XD + XB
-	XD = XD ^ (XD >> 19) ^ e ^ (e >> 8)
+	XD = XA ^ (XD >> 19) ^ e ^ (e >> 8)
 	xorlen = int(math.log10(XD))+1
 	if xorlen > 16: # Let's keep the xor bitshift number reasonable, otherwise this can get out of hand.
-		XA = int(round(time.time()))
-		XB = 246246246
-		XC = random.getrandbits(8)
-		XD = os.getpgid(0)
 		e = XA ^ (XA << 31)
-	        XA = XB + XA
-	        XB = XC + XC
-	        XC = XD + XB
-	        XD = XD ^ (XD >> 19) ^ e ^ (e >> 8)
+	        XA = XB
+	        XB = XC
+	        XC = XD
+	        XD = XA ^ (XD >> 19) ^ e ^ (e >> 8)
 	return XD
 # End xOrShift
 

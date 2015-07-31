@@ -394,7 +394,7 @@ def main(joined):
 					#--
 					# Separate fights from normal stuff
 					#
-					if channel == fightchan and info[0].lower() != 'fight':
+					if channel == fightchan and info[0].lower() != 'fight' and fightchan != defchannel:
 						fightsend("sorry bud, i only do fights here.  if you want the other stuff, /join {0}".format(defchannel))
 						continue
 					#--
