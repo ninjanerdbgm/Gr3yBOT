@@ -477,14 +477,7 @@ def xOrShift():
 	XA = XB + XA
 	XB = XC + XC
 	XC = XD + XB
-	XD = (XA ^ (XD >> 19)) ^ (e ^ (e >> 8)) & 0xFFFFFFFF
-	xorlen = int(math.log10(XD))+1
-	if xorlen > 16: # Let's keep the xor bitshift number reasonable, otherwise this can get out of hand.
-		e = (XA ^ (XA << 11)) & 0xFFFFFFFF
-	        XA = XB
-	        XB = XC
-	        XC = XD
-	        XD = (XA ^ (XD >> 19)) ^ (e ^ (e >> 8)) & 0xFFFFFFFF
+	XD = ((XA ^ (XD >> 19)) ^ (e ^ (e >> 8))) & 0xFFFFFFFF
 	return XD
 # End xOrShift
 
