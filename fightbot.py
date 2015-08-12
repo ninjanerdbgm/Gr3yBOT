@@ -473,11 +473,11 @@ def levelUp(person):
 # The following implementation was refined by bgm:
 def xOrShift():
 	global XA, XB, XC, XD
-	e = (XA ^ (XA << 11)) & 0xFFFFFFFF
+	e = (XA ^ (XA << 11)) & 0xFFFFFFFFFFFFFFF
 	XA = XB + XA
 	XB = XC + XC
 	XC = XD + XB
-	XD = ((XA ^ (XD >> 19)) ^ (e ^ (e >> 8))) & 0xFFFFFFFF
+	XD = ((XA ^ (XD >> 19)) ^ (e ^ (e >> 8))) & 0xFFFFFFFFFFFFFFFF
 	return XD
 # End xOrShift
 
