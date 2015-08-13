@@ -241,9 +241,9 @@ def getMaxHPByLevel(lvl):
 	return maxhp
 
 def critChance():
-	seed = (int(round(time.time())) << 12) * os.getpgid(0)  # Get a random number based on the current time, shift it left 12 places, then multiply it by the current process ID.
+	seed = int(time.time() * os.getpgid(0))  # Get a random number based on the current time then multiply it by the current process ID.
 	critchance = ((seed * (xOrShift())) * 246) % 100 # Multiply it by some large numbers, mod it by 100.  This returns a number between 0 and 99
-	if FIGHT_VERBOSE: log("CRIT CHANCE CALCULATION:\n------------------\nSeed = unix time bit shifted left 12 places * the python process id = {0}".format(seed))
+	if FIGHT_VERBOSE: log("CRIT CHANCE CALCULATION:\n------------------\nSeed = unix time * the python process id = {0}".format(seed))
 	if FIGHT_VERBOSE: log("Crit Chance = seed * (an xOrShift * 246) % 100 = {0} * (xOrShift * 246) % 100 = {1}".format(seed,critchance))
 	if FIGHT_VERBOSE: log("If Crit Chance < 3 (3% of the time), it crits.")
 	if critchance < 3: # 3% chance of returning a crit, essentially based on when the user attacked.
