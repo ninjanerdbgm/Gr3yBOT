@@ -331,13 +331,13 @@ def doesItMiss(choice,p1lev,p2lev):
 		if FIGHT_VERBOSE: log("BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
-		if FIGHT_VERBOSE: log("BASE for strong attack = 25 - level bonus ====> 20 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log("BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
 		if FIGHT_VERBOSE: log("BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
-		if FIGHT_VERBOSE: log("BASE for magic attack = 12 - level bonus ====> 8 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log("BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100
 	if FIGHT_VERBOSE: log("MISS CHANCE = ({0} * 246) ^ (abs(({1} - {2})) + {3}) % 100 = {4}".format(seed,p2lev,p1lev,seedtwo,tomiss))
