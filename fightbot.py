@@ -241,7 +241,7 @@ def getMaxHPByLevel(lvl):
 	return maxhp
 
 def critChance():
-	seed = int(time.time() * os.getpgid(0))  # Get a random number based on the current time then multiply it by the current process ID.
+	seed = int(time.time() * os.getpgid(0))  # Get a random number based on the current time, then multiply it by the current process ID.
 	critchance = ((seed * (xOrShift())) * 246) % 100 # Multiply it by some large numbers, mod it by 100.  This returns a number between 0 and 99
 	if FIGHT_VERBOSE: log("CRIT CHANCE CALCULATION:\n------------------\nSeed = unix time * the python process id = {0}".format(seed))
 	if FIGHT_VERBOSE: log("Crit Chance = seed * (an xOrShift * 246) % 100 = {0} * (xOrShift * 246) % 100 = {1}".format(seed,critchance))
@@ -331,13 +331,13 @@ def doesItMiss(choice,p1lev,p2lev):
 		if FIGHT_VERBOSE: log("BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
-		if FIGHT_VERBOSE: log("BASE for strong attack = 20 - level bonus ====> 20 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log("BASE for strong attack = 25 - level bonus ====> 20 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
 		if FIGHT_VERBOSE: log("BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
-		if FIGHT_VERBOSE: log("BASE for magic attack = 8 - level bonus ====> 8 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log("BASE for magic attack = 12 - level bonus ====> 8 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100
 	if FIGHT_VERBOSE: log("MISS CHANCE = ({0} * 246) ^ (abs(({1} - {2})) + {3}) % 100 = {4}".format(seed,p2lev,p1lev,seedtwo,tomiss))
@@ -473,7 +473,7 @@ def levelUp(person):
 # The following implementation was refined by bgm:
 def xOrShift():
 	global XA, XB, XC, XD
-	e = (XA ^ (XA << 11)) & 0xFFFFFFFFFFFFFFF
+	e = (XA ^ (XA << 11)) & 0xFFFFFFFFFFFFFFFF
 	XA = XB + XA
 	XB = XC + XC
 	XC = XD + XB
@@ -486,7 +486,7 @@ def rollDice(rolls,sides):
 	rollstr = []
 	for i in range(0,rolls):
 		roll = ((xOrShift() % sides) + 1)
-		rolltotal = rolltotal + ((xOrShift() % sides) + 1)
+		rolltotal = rolltotal + roll
 		rollstr.append(roll)
 	rollstr = " + ".join(map(str, rollstr))
 	if FIGHT_VERBOSE: log("Dice Roll: {0}d{1} ---> {3} = {2}".format(rolls,sides,rolltotal,rollstr))
