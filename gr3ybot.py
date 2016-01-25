@@ -2173,7 +2173,7 @@ def main(joined):
 			f.seek(0) # Go to the beginning of the file
 			for line in lines:
 				if memnick == line.split('[-]')[1]: # If the nickname we got earlier is the second name in the line, they have a memo
-					if getChannel(data) == defchannel:
+					if getChannel(data) != fightchan:
 						send("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]),getChannel(data))
 					else:
 						fightsend("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]))
