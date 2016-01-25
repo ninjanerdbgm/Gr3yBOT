@@ -141,13 +141,8 @@ def log(text):
 
 def admins(nick, host):
 	bgm = re.compile('bgm@.+')
-	chen = re.compile('MasterChen@.+')
-	doxy = re.compile('d0xy@.+')
-	f0x = re.compile('l4bf0x@.+')
-	zen = re.compile('Zenifi@.+')
-	huseby = re.compile('MagicDave@.+')
 	if VERBOSE: log("Host: {0}".format(host))
-	if (re.match(bgm, host) or re.match(chen, host) or re.match(doxy, host) or re.match(f0x, host) or re.match(zen, host) or re.match(huseby, host)):
+	if (re.match(bgm, host)):
 		if VERBOSE: log("Found a matching admin nick.  Are they identified?")
 		sendraw('PRIVMSG NickServ :STATUS {0}'.format(nick))
                 time.sleep(1)
