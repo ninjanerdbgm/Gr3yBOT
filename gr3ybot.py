@@ -215,11 +215,12 @@ def makeBotText(text):
 	text = text.lower()
 	return text
 	
-def cleanText(text):
+def cleanText(text, tell=False):
 	if len(text) > 450: text = text[:445] + '[CUT]'
 	text = text.encode('utf-8','ignore')
 	text = strTranslate(text)
-	text = makeBotText(text)
+	if not tell:
+		text = makeBotText(text)
 	return text
 
 def getMessage(data):
@@ -248,12 +249,12 @@ def join(chan):
 def quit(chan):
 	irc.send('PART ' + chan + '\r\n')
 
-def send(msg,chan=channel):
-	msg = cleanText(msg)
+def send(msg,chan=channel,tell=False):
+	msg = cleanText(msg,tell)
 	irc.send('PRIVMSG ' + chan + ' :{0}\r\n'.format(msg))
 
-def fightsend(msg):
-	msg = cleanText(msg)
+def fightsend(msg,tell=False):
+	msg = cleanText(msg,tell)
 	irc.send('PRIVMSG ' + fightchan + ' :{0}\r\n'.format(msg))
 
 def sendraw(msg):
@@ -1243,7 +1244,7 @@ def main(joined):
 							if info[0].lower() == 'remindme': message = info[1:]
 							if info[0].lower() == 'remind' and info[1].lower() == 'me': message = info[2:]
 						except: 
-							if special == 0: send("heres your reminder: 1) learn to read, 2) read %help",getChannel(data))
+							if special == 0: send("heres your reminder: 1) learn to read, 2) read %help",getChannel(data),tell=True)
 							else: usernick = getNick(data); privsend("heres your reminder: 1) learn to read, 2) read %help",usernick)
 							continue
 						message = " ".join(message)
@@ -2181,9 +2182,9 @@ def main(joined):
 			for line in lines:
 				if memnick == line.split('[-]')[1]: # If the nickname we got earlier is the second name in the line, they have a memo
 					if getChannel(data) != fightchan:
-						send("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]),getChannel(data))
+						send("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]),getChannel(data),tell=True)
 					else:
-						fightsend("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]))
+						fightsend("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]),tell=True)
 					if VERBOSE: log("Told {0} {1}".format(line.split('[-]')[1],line.split('[-]')[2]))
 					continue
 				else:
