@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-
+#!usr/bin/env python
+# encoding=utf-8
 #--
 # Gr3yBOT by BGM, 05/27/2015
 # https://greynoi.se
@@ -13,6 +13,7 @@
 #		- Urban Dictionary definitions
 #		- A full-fledged RPG fighting system
 #		- CleverBot integration
+#		- A creepy stalker subrouting (I'm a horror fan)
 #		- A memos system to relay a message to another user
 #		- Unobtrusive and entertaining idle chat.
 #		- Twitter Integration, including:
@@ -34,6 +35,7 @@
 from gr3ybot_settings import *
 from chatterbotapi import ChatterBotFactory, ChatterBotType
 import struct
+from difflib import SequenceMatcher
 from bottube import *
 import socket
 import string
@@ -43,6 +45,8 @@ from twitbot import *
 from slackbot import *
 from yelpbot import *
 from weatherbot import *
+from summarize import *
+from confessions import *
 from os import path
 import random
 import signal
@@ -56,18 +60,24 @@ from pytz import timezone
 import pytz
 from wiki import wiki
 import datetime
+import feedparser
 import re
 from fightbot import *
+from wolfbot import *
 
 #-- Version, and AI initialization, and variables
-version = "1.0. Version Name: Unassuming Local Guy"
 random.seed()
+
+os.environ['TZ'] = LOCALTZ
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 AI = ChatterBotFactory()
 botAI = AI.create(ChatterBotType.CLEVERBOT)
 convo = botAI.create_session()
 
 andcount = 0 #for gimli
+creepfactor = 0 #for creep
 stopfight = 0 #for fight
 lastMessage = "Hi" #for idle chat
 lastPerson = "-*404" #for idle chat, too
@@ -85,22 +95,40 @@ f.close()
 
 #-- Set botname match string and connect to IRC
 matchbot = botname.lower()
+def connect():
+	global irc
+	irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
+	print "Connecting to {0}:{1}".format(server,port)
+	irc.connect((server,port))
+	irc.setblocking(False)
+	#irc.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
 
-irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
-irc.connect((server,port))
-irc.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
-print irc.recv(512)
-irc.send ( 'PASS {0} \r\n'.format(password) )
-irc.send ( 'NICK {0}\r\n'.format(botname) )
-irc.send ( 'USER {0} {1} {2} :Python-powered IRC bot to help moderate #gr3ynoise\r\n'.format(botname,botname,botname) )
-irc.send ( 'JOIN {0}\r\n'.format(channel))
-if len(fightchan) > 0:
-	irc.send ( 'JOIN {0}\r\n'.format(fightchan))
+	if len(channelpw) > 1:
+		irc.send ( 'PASS {0} \r\n'.format(channelpw) )
+	print "Setting nickname to {0}...".format(botname)
+	irc.send ( 'NICK {0}\r\n'.format(botname) )
+	print "Identifying the bot..."
+	irc.send ( 'USER {0} {1} {2} :Python-powered IRC bot to help moderate #synackpack\r\n'.format(botname,botname,botname) )
+	print "Joining the channels..."
+	channel = channels[0]
+	for c in channels:
+		irc.send ( 'JOIN {0}\r\n'.format(c))
+	if len(fightchan) > 0:
+		irc.send ( 'JOIN {0}\r\n'.format(fightchan))
 #--
 
 #-- Send a message upon joining the channel
-irc.send ( 'PRIVMSG {0} :hey type %help if youre dumn\r\n'.format(channel))
-if fightchan != defchannel: irc.send ( 'PRIVMSG {0} :llllllets get ready to rumbleeeee orrrr read %fight help if you dont know what im talking abouuuuuuuuuuut\r\n'.format(fightchan))
+def joinmsg(chan, dcd=1):
+	if dcd == 1:
+		irc.send ( 'PRIVMSG {0} :hey type %help if youre dumn\r\n'.format(chan))
+	else:
+		irc.send ( 'PRIVMSG {0} :im back bitches.  you thought you could kill me but ive only become stronger\r\n'.format(chan))
+#--
+
+#-- Identify with NICKSERV
+def ident():
+	print "Identifying with NICKSERV..."
+	irc.send ( 'PRIVMSG NICKSERV :IDENTIFY {0}\r\n'.format(password) )
 #--
 
 #-- Functions
@@ -111,14 +139,25 @@ def log(text):
 		if ECHO_LOG: print "{0} --==-- {1}".format(localnow.strftime(timeformat),text)
 	g.close()
 
-def admins(host):
-	synackers = open('admins', 'r')
-	for line in synackers:
-		if VERBOSE: log("Host/Line: {0}/{1}".format(host,line))
-		if host in line:
+def admins(nick, host):
+	bgm = re.compile('bgm@.+')
+	chen = re.compile('MasterChen@.+')
+	doxy = re.compile('d0xy@.+')
+	f0x = re.compile('l4bf0x@.+')
+	zen = re.compile('Zenifi@.+')
+	huseby = re.compile('MagicDave@.+')
+	if VERBOSE: log("Host: {0}".format(host))
+	if (re.match(bgm, host) or re.match(chen, host) or re.match(doxy, host) or re.match(f0x, host) or re.match(zen, host) or re.match(huseby, host)):
+		if VERBOSE: log("Found a matching admin nick.  Are they identified?")
+		sendraw('PRIVMSG NickServ :STATUS {0}'.format(nick))
+                time.sleep(1)
+                rawdata = irc.recv(1024)
+		if "{0} 3 {0}".format(nick) in rawdata:
 			return 1
 		else:
-			status = 0
+			status = 2
+	else:
+		status = 0
 	return status
 
 def getHost(host):
@@ -127,47 +166,64 @@ def getHost(host):
 	return host
 
 def getChannel(data):
-	chan = data.split('#')[1]
-	chan = chan.split(':')[0]
-	chan = '#' + chan
-	chan = chan.strip(' \t\n\r')
+	try:
+		chan = data.split('#')[1]
+		chan = chan.split(':')[0]
+		chan = '#' + chan
+		chan = chan.translate(None, "\t\r\n")
+	except IndexError:
+		chan = defchannel
 	return chan
 
 def getNick(data):
 	nick = data.split('!')[0]
 	nick = nick.replace(':', '')
-	nick = nick.strip(' \t\n\r')
+	nick = nick.translate(None, "\t\r\n")
 	return nick
 
-def getChatters():
-        data = irc.recv(512)
-        if VERBOSE: log("Call for list of names in {0}".format(channel))
-        print data
-        names = False
-        if '353' in data:
-                names = data.split('353')[1]
-                names = names.split(':')[1]
-                names = names.split(' ')
-                names = [i.strip('@').strip('\r\n') for i in names]
-                print names
-                try:
-                        names.remove(botname)
-                except ValueError: names = names
-                if VERBOSE:
-                        log("People in the channel:")
-                        for i in names:
-                                log(i)
-        if len(names) == 1:
-                return "lonely"
-        return names
+def getChatters(data,chan=channel):
+	if VERBOSE: log("Call for list of names in {0}".format(chan))
+	names = False
+	if '353' in data:
+		names = data.split('353')[1]
+		names = names.split(':')[1]
+		names = names.split(' ')
+		names = [i.strip('@').strip('\r\n') for i in names]
+		print names
+		try:
+			names.remove(botname)
+		except ValueError: names = names
+		if VERBOSE:
+			log("People in the channel:")
+			for i in names:
+				log(i)
+	if len(names) == 1:
+		return "lonely"
+	return names
 
-def getRandomPerson():
-        names = getChatters()
-        print "NAMES: ",names
-        if not names or len(names) == 0: return False
-        if names == "lonely": return "lonely"
-        else: person = names[random.randint(0,len(names) - 1)]
-        return person
+def getRandomPerson(data,chan=channel):
+	names = getChatters(data,getChannel(data))
+	print "NAMES: ",names
+	if not names or len(names) == 0: return False
+	if names == "lonely": return "lonely"
+	else: person = names[random.randint(0,len(names) - 1)]
+	return person
+
+def strTranslate(text):
+	text = text.translate(None, "\t\r\n")
+	return text
+
+def makeBotText(text):
+	text = text.translate(None, "!?'")
+	text = text.lower()
+	return text
+	
+def cleanText(text):
+	if len(text) > 450: text = text[:445] + '[CUT]'
+	text = text.encode('utf-8','ignore')
+	text = strTranslate(text)
+	text = makeBotText(text)
+	return text
 
 def getMessage(data):
 	try:
@@ -185,66 +241,48 @@ def matchYouTube(msg):
 	r'(https?://)?(www\.)?'
         '(youtube|youtu|youtube-nocookie)\.(com|be)/'
         '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
-
 	matchit = re.match(yt, msg)
 	if matchit: return True
 	return False
 
-def join():
-	irc.send('JOIN ' + channel + '\r\n')
-	if fightchan != defchannel: irc.send('JOIN ' + fightchan + '\r\n')
+def join(chan):
+	irc.send('JOIN ' + chan + '\r\n')
 
-def send(msg):
-	irc.send('PRIVMSG ' + channel + ' :{0}\r\n'.format(msg))
+def quit(chan):
+	irc.send('PART ' + chan + '\r\n')
+
+def send(msg,chan=channel):
+	msg = cleanText(msg)
+	irc.send('PRIVMSG ' + chan + ' :{0}\r\n'.format(msg))
 
 def fightsend(msg):
+	msg = cleanText(msg)
 	irc.send('PRIVMSG ' + fightchan + ' :{0}\r\n'.format(msg))
 
 def sendraw(msg):
 	irc.send((msg + '\n').encode('utf-8'))
 
-def notify(name,msg):
-	irc.send('NOTICE ' + name + ' :{0}\r\n'.format(msg))
-
 def privsend(msg, nick):
+	msg = cleanText(msg)
 	irc.send('PRIVMSG ' + nick + ' :{0}\r\n'.format(msg))
 
-def op(opuser):
+def op(opuser,chan=channel):
 	if isinstance(opuser, list):
 		for i in opuser:
-			irc.send('MODE {0} +o {1}\r\n'.format(channel,i.strip('\r\n')))
+			irc.send('MODE {0} +o {1}\r\n'.format(chan,i.strip('\r\n')))
 	else:
-		irc.send('MODE {0} +o {1}\r\n'.format(channel,opuser))
+		irc.send('MODE {0} +o {1}\r\n'.format(chan,opuser))
 
-def deop(opuser):
+def deop(opuser,chan=channel):
 	if isinstance(opuser, list):
 		for i in opuser:
-			irc.send('MODE {0} -o {1}\r\n'.format(channel,i.strip('\r\n')))
+			irc.send('MODE {0} -o {1}\r\n'.format(chan,i.strip('\r\n')))
 	else:
-		irc.send('MODE {0} -o {1}\r\n'.format(channel,opuser))
+		irc.send('MODE {0} -o {1}\r\n'.format(chan,opuser))
 
-def kick(user, reason):
-	irc.send('KICK ' + channel + ' ' + user + ' :{0}'.format(reason))
-
-def jsontitle(data):
-	title = data.split('title":"')
-	title = title[1].split('",')
-	title = title[0]
-	return title
-
-def jsonurl(data):
-	url = data.split('":"')
-	url = url[1].split('",')
-	url = url[0]
-	return "http://www.greynoi.se/podcasts/{0}".format(url)
-
-def jsondesc(data):
-	desc = data.split('html":"')
-	desc = desc[1].replace('\r\n',' ')
-	desc = desc.split('Related Links')
-	desc = desc[0]
-	desc = desc.replace('\\r\\n\\r\\n','  ')
-	return desc
+def kick(user, reason, chan=channel):
+	reason = reason.translate(None, "\t\r\n")
+	irc.send('KICK ' + chan + ' ' + user + ' :{0}'.format(reason))
 
 def rline(f):
 	line = next(f)
@@ -253,13 +291,13 @@ def rline(f):
 		line = randline
 	return line
 
-def checkTwits():
-	 #--
-         # Let's check to see if someone tweeted at the bot every so often.
-         # If so, post the message in chat.
-         #--
-        if VERBOSE: log("Checking for tweets @ the bot...")
-        try:
+def checkTwits(chan=channel):
+	#--
+	# Let's check to see if someone tweeted at the bot every so often.
+	# If so, post the message in chat.
+	#--
+	if VERBOSE: log("Checking for tweets @ the bot...")
+	try:
 		twts = isTweetedAt(twittername)
 	#
 	#
@@ -271,31 +309,34 @@ def checkTwits():
 	#	if e.message[0]["code"] == 130:	
 	#		if VERBOSE: log("Twitter has reached a bandwidth limit and kicked back no response.")
 	#	return False
-	except:
-		log("Something went wrong...")
+	except Exception as e:
+		if VERBOSE: log("Error with twitter: {0}".format(str(e)))
 		return False
 	try:
 		if twts != False:
 			if len(twts) > 0:
 				j = 0
-			      	send("ive got some new tweets @ me...")
+			      	send("ive got some new tweets @ me...",chan)
 			        if VERBOSE: log("Someone tweeted at {0}!".format(botname))
 			        for msg in enumerate(twts):
 			              	mag = getTweet(0,checkids=msg[1])
-				        send("@{0} >> {1}".format(mag.user.screen_name,mag.text.encode('utf-8')))
-			                if VERBOSE: log("@{0} >> {1}".format(mag.user.screen_name,mag.text.encode('utf-8')))
-					q = convo.think(mag.text.encode('utf-8')); # Trigger a cleverbot response
-                                        q = q.lower()
-                                        q = "".join(c for c in q if c not in ('\'','"','!',':',';'))
-					q = "@{0} {1}".format(mag.user.screen_name,q)
-					if "@{}".format(mag.user.screen_name) != "{}".format(twittername):
-						send("i think ill reply with: {0}".format(q))
-						try:
-							postTweet(q)
-						except:
-							pass
-					else:
-						send("making me talk to myself. clever.")
+					if '@' + mag.user.screen_name.lower() == twittername.lower():
+						send("oh nm its just me for some reason",chan)
+						continue
+					send("@{0} >> {1}".format(mag.user.screen_name,mag.text,chan))
+			        if VERBOSE: log("@{0} >> {1}".format(mag.user.screen_name,tmsg))
+				q = convo.think(mag.text.encode('utf-8')); # Trigger a cleverbot response
+		                q = q.translate(None, "'\"!:;")
+				q = "@{0} {1}".format(mag.user.screen_name,q)
+				if "@{}".format(mag.user.screen_name) != "{}".format(twittername):
+					send("i think ill reply with: {0}".format(q),chan)
+					try:
+						postTweet(q)
+					except Exception as e:
+						if VERBOSE: log("Couldn't post tweet: {0}".format(str(e)))
+						pass
+				else:
+					send("making me talk to myself. clever.",chan)
 			else: 
 				if VERBOSE: log("None found!")
 		else: 
@@ -303,7 +344,7 @@ def checkTwits():
 	except TypeError:
 	       	if VERBOSE: log("None found!")
 			
-def checkReminders():
+def checkReminders(chan=channel):
 	#--
 	# Check the reminders file to see if anyone needs to be reminded
 	# of anything...
@@ -314,11 +355,11 @@ def checkReminders():
 		for line in lines:
 			thisline = line.split('[-]')
 			if float(thisline[1]) < time.time():
-				send("hey {0}, heres a reminder for you: {1}".format(thisline[0],thisline[2]))
+				send("hey {0}, heres a reminder for you: {1}".format(thisline[0],thisline[2]),chan)
 				privsend("hey {0}, heres a reminder for you: {1}".format(thisline[0],thisline[2]),thisline[0])
-				sendPing("SynackBOT","{}".format(thisline[0]),"heres your reminder: {0}".format(thisline[2]))
+				sendPing("Gr3yBot","{}".format(thisline[0]),"heres your reminder: {0}".format(thisline[2]))
 				g = open('memos', 'a')
-				g.write("SynackBOT[-]{0}[-]dont forget: {1}".format(thisline[0],thisline[2]))
+				g.write("Gr3yBot[-]{0}[-]dont forget: {1}".format(thisline[0],thisline[2]))
 				g.close()
 				if VERBOSE: log("Sent a reminder to {0}!".format(thisline[0]))
 			else:
@@ -329,47 +370,95 @@ def checkReminders():
 
 #-- Main Function
 def main(joined):
+	connect()
+	disconnected = 0
+	joined = False
 	while True:
 		special = 0
 		action = 'none'
-		data = irc.recv(4096)
+		try:
+			data = irc.recv(1024)
+		except:
+			continue
 		if len(data) == 0:
-			break
+			if VERBOSE: 
+				log("\n============================================\nFATAL ERROR:\n============================================")
+				log("The bot has been disconnected from the server.  Reconnecting...")
+				log("\n============================================\nEND OF ERROR\n============================================")
+			try:
+				sendPing("Gr3yBot","bgm","The bot died.  Check the logs for info.")
+			except Exception as e:
+				log("Could not send ping to bgm for reason: {}".format(str(e)))
+			disconnected=True
+			connect()
 	
 		if CHATLOG: log(data)
-
-		# OLD
-		#if data.find(server_slug) != -1:
-		#	join()
+		
+		try:
+			if joined == False:
+				if disconnect == 0:
+					for chan in channels:
+						join(chan)
+						joinmsg(chan, 1)
+					ident()
+				else:
+					for chan in channels:
+						join(chan)
+						joinmsg(chan, 2)
+				joined = True
+				disconnected=False
+				ident()
+		except NameError:
+			if joined == False:
+				for chan in channels:
+	                        	join(chan)
+	                                joinmsg(chan, 1)
+	                        ident()
+				joined = True
+		
 	
 		try:
-			if data.find('PING') != -1:
-	                        #--
-	                        # Since IRC servers send out a PING message at fixed intervals, I use it for timed functions.
+			if data[0:4] == 'PING':
+		        	#--
+		        	# Since IRC servers send out a PING message at fixed intervals, I use it for timed functions.
 				#
 				# Reset the fight history flood protection...
 				tellinghistory = 0
-	                        #
-	                        # Check to see if anyone tweeted at the bot...
-	                        if TWITTER_ENABLED: checkTwits()
-				#checkReminders()
-	                        # Have a 30% chance to shift the XOR bits in the fightbot RNG (this is to try to make it more random)
-	                        if (random.randint(1,99193) * int(time.time())) % 100 < 30:
-	                                shift = xOrShift()
-	                                if VERBOSE: log("XOR bits shifted to: {0}".format(shift))
-	                        #
-	                        # And finally, return the PONG message to keep the bot alive.
-	                        irc.send('PONG ' + data.split()[1] + '\r\n')
-		except UnicodeDecodeError:
-                        continue
+		            	           
+				# Check to see if anyone tweeted at the bot...
+			        if TWITTER_ENABLED: checkTwits(getChannel(data))
+			   	checkReminders(getChannel(data))
+		            
+				# Have a 30% chance to shift the XOR bits in the fightbot RNG (this is to try to make it more random)
+		            	if (random.randint(1,99193) * int(time.time())) % 100 < 30:
+					shift = xOrShift()					
+					if VERBOSE: log("XOR bits shifted to: {0}".format(shift))
+		            
+			        # And finally, return the PONG message to keep the bot alive.
+				try:
+					time.sleep(1)
+					irc.send('PONG ' + data.split()[1] + '\r\n')
+				except Exception as e:
+					if VERBOSE: log("Couldn't send PONG response: {}".format(str(e)))
+					continue
+
+		except UnicodeDecodeError as e:
+			if VERBOSE: log("Couldn't send PONG message: {0}".format(str(e)))
+			continue
 	
 		if data.find('#') != -1:
 			action = data.split('#')[0]
 			action = action.split(' ')[1]
 
-		if data.find('PRIVMSG {0} :%'.format(botname)) != -1:
-			action = 'PRIVMSG'
-			special = 1
+		try:
+			name = getNick(data)
+			host = getHost(data)
+			if data.startswith(':{0}!{1} PRIVMSG {2}'.format(name,host,botname)):
+				action = 'PRIVMSG'
+				special = 1
+		except:
+			action = 'none'
+			special = 0
 	
 		if data.find('NICK') != -1:
 			if data.find('#') == -1:
@@ -377,20 +466,22 @@ def main(joined):
 	
 		if action != 'none':
 			sender = getNick(data)
+			defchannel = channels[0]
 			if action == 'JOIN': joined = 1
 			if action == 'PRIVMSG':
 				if getChannel(data) == fightchan:
 					channel = fightchan
 				else:
-					channel = defchannel
+					channel = getChannel(data)
 				if data.find('%') != -1: # Change the % here to be ! or whatever you want the command trigger to be
 					x = data.split(':',2)[2:] # let's make sure to get all the text
 					x = " ".join(x)
 					x = x.split('%',1)[1:] # Do the same as before, but with any other commands later on in the line
 					x = " ".join(x)
 					info = x.split(' ') # Now let's turn it back into a list
-					info[0] = info[0].strip(' \t\n\r')
+					info[0] = info[0].translate(None, "\t\r\n")
 					info[0] = ''.join(c for c in info[0] if c not in ('.',',','!','?',':','"','\''))
+					if len(info[0]) == 0: continue
 					#--
 					# Separate fights from normal stuff
 					#
@@ -404,64 +495,234 @@ def main(joined):
 					# info[0] gets set to whatever the first thing after % is in chat.
 					# info[1:] refers to all other text after it.
 					#--
-					
+				
+					###===================================###
+			                #                                       #
+			                #       START ADMIN ONLY COMMANDS       #
+			                #                                       #
+			                ###===================================###					
+	
 					#--
 					# OPER COMMAND
 					if info[0].lower() == 'op':
+						nick = getNick(data)
 						host = getHost(data)
-						status = admins(host)
+						status = admins(nick, host)
+						try:
+							who = info[1].translate(None, "\t\r\n")
+						except:
+							send("who do you wanna op",getChannel(data))
+							continue
 						if status == 1:
 							try:
-								op(info[1:])
-								if VERBOSE: log("Opped {0}".format(info[1:]))
+								op(who,getChannel(data))
+								if VERBOSE: log("Opped {0}".format(who))
 							except TypeError:
-								send("who do you wanna op, dumb dumn")
+								send("who do you wanna op, dumb dumn",getChannel(data))
 								continue
+						elif status == 2:
+							send("i mean, you look like an admin but can you identify like an admin",getChannel(data))
+							continue
 						else:
-							send("you dont know what youre talking about")
+							send("you dont know what youre talking about",getChannel(data))
 							continue
 					#--
 
-					#--
-                                        # DEOP COMMAND
-                                        if info[0].lower() == 'deop':
-						host = getHost(data)
-						status = admins(host)
-						if status == 1:
-		                                        try:
-	        	                                        deop(info[1:])
-	                                                        if VERBOSE: log("Deopped {0}".format(info[1:]))
-	                                                except TypeError:
-	                                                        send("who do you wanna deop, dumb dumn")
-	                                                        continue
-						else:
-							send("you dont know what youre talking about")
+					# KICK COMMAND
+					if info[0].lower() == 'kick':
+						nick = getNick(data)
+			                        host = getHost(data)
+			                        status = admins(nick, host)
+						if "".join(info[1]).rstrip().lower() == botname.lower():
+							send("nah",getChannel(data))
 							continue
-                                        #--
+						reason = "".join(info[2:]).rstrip()
+						if not reason or reason is None:
+							reason = "sorry i hit the wrong key and now youve been kicked"
+						if status == 1:
+							try:
+								sendraw("KICK {0} {1} :{2}".format(defchannel,"".join(info[1]).rstrip(),reason))
+								if VERBOSE: log("Kicked {0}.".format(info[1]))
+							except Exception as e:
+								send("nah",getChannel(data))
+								if VERBOSE: log("Failed to kick {0} for reason {1}. Error message: {2}".format(info[1].translate(None, "\t\r\n"),reason,str(e)))
+						elif status == 2:
+							send("i mean, you look like an admin but can you identify like an admin",getChannel(data))  
+							continue
+						else:
+							send("you dont know what youre talking about.",getChannel(data))
+					#--
+
+					#--
+					# JOIN COMMAND
+					if info[0].lower() == 'join':
+						nick = getNick(data)
+						host = getHost(data)
+						status = admins(nick, host)
+						try:
+							info[1].rstrip()
+						except:
+							send("i am joined iddiot",getChannel(data))
+							continue
+						if status == 1 and '#' in info[1].rstrip():
+							send("ok",getChannel(data))
+							sendraw('JOIN {0}'.format(info[1].rstrip()))
+						elif status == 2 and '#' in info[1].rstrip():
+							send("you look like an admin but can you identify like an admin",getChannel(data))
+							continue
+						else:
+							send("ill join my fist to your face",getChannel(data))
+							continue
+
+					#--
+
+					#--
+					# QUIT COMMAND
+					if info[0].lower() in ('quit','leave','part'):
+						nick = getNick(data)
+						host = getHost(data)
+						status = admins(nick,host)
+						if status == 1:
+							send("ok",getChannel(data))
+							time.sleep(1)
+							quit(getChannel(data))
+						elif status == 2:
+							send("mmmmmmmm if you identify yourself as an admin first i might take you seriously",getChannel(data))
+							continue
+						else:
+							send("no",getChannel(data))
+							continue
+
+					#--
+			                # DEOP COMMAND
+			                if info[0].lower() == 'deop':
+						nick = getNick(data)
+	                		        host = getHost(data)
+			                        status = admins(nick, host)
+						try:
+							who = info[1].translate(None, "\t\r\n")
+						except:
+							send("who do you want to deop tho",getChannel(data))
+							continue
+						if status == 1:
+				                	try:
+	        	        		        	deop(who,getChannel(data))
+								if VERBOSE: log("Deopped {0}".format(who))
+				                        except TypeError:
+		        			                send("who do you wanna deop, dumb dumn",getChannel(data))
+					                        continue
+						elif status == 2:
+							send("i mean, you look like an admin but can you identify like an admin",getChannel(data))
+							continue
+						else:
+							send("you dont know what youre talking about",getChannel(data))
+							continue
+			                #--
 
 					# TOPIC COMMAND
 					if info[0].lower() == 'topic':
-						host = getHost(data)
-						status = admins(host)
+						nick = getNick(data)
+			                        host = getHost(data)
+			                        status = admins(nick, host)
 						if status == 1:
 							try:
 								topic = info[1:]
 								topic = " ".join(topic)
-								topic = topic.replace('http //','http://')
-								topic = topic.strip('\t\r\n')
-								send("the new topic is butts.  discuss, everyone.")
+								topic = topic.replace('http //','http://').translate(None, "\t\r\n")
+								send("the new topic is butts.  discuss, everyone.",getChannel(data))
 								time.sleep(2)
-								irc.send("TOPIC {0} :{1}\n".format(channel,topic))
+								irc.send("TOPIC {0} :{1}\n".format(getChannel(data),topic))
 								if VERBOSE: log("Topic changed to: {0}".format(topic))
 							except:
-								sendraw("TOPIC {0}".format(channel))
+								sendraw("TOPIC {0}".format(getChannel(data)))
+								time.sleep(.5)
 								topic = irc.recv(2056)
-								topic.split("{0}: ".format(channel))
-								send(topic[1])
+								topic.split("{0}: ".format(getChannel(data)))
+								send(topic[1],getChannel(data))
+						elif status == 2:
+							send("i mean, you look like an admin but can you identify like an admin",getChannel(data))
+							continue
+						else:
+							send("you dont know what youre talking about",getChannel(data))
+							continue
+
+					# SHOW START/STOP COMMAND
+					if info[0].lower() == 'show':
+						try:
+							started
+						except:
+							started = None
+						nick = getNick(data)
+						host = getHost(data)
+						status = admins(nick, host)
+						try:
+							cmd = info[1].rstrip()
+						except:
+							send("%show?  what?  do you want to start or stop a show? dont be dumn",getChannel(data))
+							continue
+						if status == 1:
+							if cmd == 'start':
+								if started == False or started is None:
+									started = True
+									questions = []
+									if VERBOSE: log("Show has Started!")
+									send("ok folks the show has started.  ask a question starting with %q and the hosts will answer them at the end of the show",getChannel(data))
+									send("so like: %q why does my butt smell so bad",getChannel(data))
+									continue
+								else:
+									send("the show already started doe",getChannel(data))
+									continue
+							elif cmd == 'stop':
+								if started == True:
+									if VERBOSE: log("Show stopped, sending questions to the hosts...")
+									send("ok shows over folks nothing to see here go home.",getChannel(data))
+									send("wait no what i meant was ive sent your questions to the hosts",getChannel(data))
+									if len(questions) > 0:
+										for thing in questions:
+											for admin in ADMINLIST:
+												privsend(thing,admin)
+										questions = []
+									else:
+										send("nobody asked questions?  boooo",getChannel(data))
+									started = False
+									continue
+								else:
+									send("the show hasnt been started yet doe",getChannel(data))
+									continue		
+
+						elif status == 2:
+							send("are you really a host.  i mean.  can you identify like a host.",getChannel(data))
+							continue
+						else:
+							send("i think only a host can {0} a show tho.  ill ask hold on".format(cmd),getChannel(data))
+							continue
+
+					# ASK A QUESTION TO THE SHOW HOSTS
+					if info[0].lower() == 'q':
+						try:
+							questions
+						except NameError: 
+							if VERBOSE: log("{0} tried to ask a question outside of the show boundries.".format(getNick(data)))
+							continue
+						try:
+							query = info[1:]
+						except:
+							send("you need to actually ask a question",getChannel(data))
+							continue
+						query = " ".join(query)
+						if started == True:
+							questions.append("{0} asks: {1}".format(getNick(data),query))
+							send("ok got it",getChannel(data))
+
+					###===================================###
+					#					#
+					#	END ADMIN ONLY COMMANDS		#
+					#					#
+					###===================================###
 				
 					# VERSION COMMAND
 					if info[0].lower() == 'version':
-						if special == 0: send("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version))
+						if special == 0: send("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),getChannel(data))
 						else: name = getNick(data); privsend("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),name)
 						if VERBOSE: log("Version: {0}".format(version))
 			
@@ -479,7 +740,7 @@ def main(joined):
 						except ValueError:
 							end = 3 # Same as above
 						if VERBOSE: log("The next {0} events at SynShop:".format(end))
-						if special == 0: send("geez fine, check your pms")
+						if special == 0: send("geez fine, check your pms",getChannel(data))
 						time.sleep(1.5)
 						#--  I broke up the URL into five lines here for formatting reasons only
 						meetupurl = 'https://api.meetup.com/2/events'
@@ -509,11 +770,11 @@ def main(joined):
 							if VERBOSE: log("Sent the following info to {0}:\n{1} - {2}\nWhen: {3}\nMore Info: {4}".format(nick, name, desc, gettime.strftime("%A, %B %d %Y"), url))
 							time.sleep(2)
 							i = i + 1
-						privsend("visit synshop: 117 n 4th st, las vegas, nv 89101", nick)
+						privsend("visit synshop: 1075 american pacific drive suite c, henderson, nv, 89074", nick)
 						privsend("-- done, ok thx bai --", nick)					
 	
 					# BREAKFAST, BRUNCH, LUNCH, DINNER COMMANDS	
-					if any(info[0].lower() in s for s in yelp_keywords) and YELP_ENABLED:
+					if (info[0].lower() in yelp_keywords) and YELP_ENABLED:
 						try:
 							loc = info[1:]
 						except IndexError:
@@ -540,8 +801,9 @@ def main(joined):
 								url.append(i["url"])
 								rating.append(i["rating_img_url"])
 								reviews.append(i["review_count"])
-						except TypeError:
-							if special == 0: send("what?  did a cat walk all over your keyboard just now?")
+						except (TypeError, Exception) as e:
+							if VERBOSE: log("Non-fatal Yelp error: {0}".format(str(e)))
+							if special == 0: send("what?  did a cat walk all over your keyboard just now?",getChannel(data))
 							else: usernick = getNick(data); privsend("what?  did a cat walk all over your keyboard just now?", usernick)
 							continue
 						randresult = random.randint(0,len(name)-1)
@@ -561,7 +823,7 @@ def main(joined):
 						rating = rating.replace('_','')
 						rating = rating.replace('half','.5')
 						if VERBOSE: log("Suggesting: {0} ({1} stars from {2} reviews).  URL: {3}".format(name,rating,reviews,url))
-						if special == 0: send("maybe you should try {0}? ({1} stars from {2} reviews). more info: {3}".format(name,rating,reviews,url))
+						if special == 0: send("maybe you should try {0}? ({1} stars from {2} reviews). more info: {3}".format(name,rating,reviews,url),getChannel(data))
 						else: usernick = getNick(data); privsend("maybe you should try {0}? ({1} stars from {2} reviews). more info: {3}".format(name,rating,reviews,url),usernick)
 
 					# URBAN DICTIONARY			
@@ -569,7 +831,7 @@ def main(joined):
 						try:
 							mean = info[1:]
 						except IndexError:
-							if special == 0: send("i dont kno how to define nothing, guy")
+							if special == 0: send("i dont kno how to define nothing, guy",getChannel(data))
 							else: usernick = getNick(data); privsend("what",usernick)
 							continue
 						word = " ".join(mean)
@@ -577,79 +839,118 @@ def main(joined):
 						if VERBOSE: log("Define {0}:".format(word))
 						meaning, example, url = getWord(word)
 						if meaning is None:
-							if special == 0: send("that doesnt seem to be a thing.")
+							if special == 0: send("that doesnt seem to be a thing.",getChannel(data))
 							else: usernick = getNick(data); privsend("that doesnt seem to be a thing",usernick)
 							if VERBOSE: log("Nothing Found.")
 							continue
-						meaning = "".join(c for c in meaning if c not in ('\n','\r','\t'))
-						example = "".join(c for c in example if c not in ('\n','\r','\t'))
+						if example is None:
+							if VERBOSE: log("Nothing Found.")
+							send("aint nothing found. go away.",getChannel(data))
+							continue
 						if special == 0:
-							send("first thing i could find:")
-							send("{0} - {1}".format(word, meaning))
-							send("example: {0}".format(example))
-							send("this is where you can get more definitions: {0}".format(url))					
+							try:
+								send("first thing i could find:",getChannel(data))
+								send("{0} - {1}".format(word, meaning),getChannel(data))
+								send("example: {0}".format(example),getChannel(data))
+								send("this is where you can get more definitions: {0}".format(url),getChannel(data))					
+							except Exception as e:
+								if VERBOSE: log("Error with urban dictionary: {0}".format(str(e)))  
+								send("i found something but i cant read it because im not alive nor am i literate",getChannel(data))
+								continue
 						else:
 							name = getNick(data)
 							privsend("first thing i could find:",name)
-                                                        privsend("{0} - {1}".format(word, meaning),name)
-                                                        privsend("example: {0}".format(example),name)
-                                                        privsend("this is where you can get more definitions: {0}".format(url),name)
-						if VERBOSE: log("{0} - {1}\nExample: {2}\nMore Info: {3}".format(word,meaning,example,url))
+                            				privsend("{0} - {1}".format(word, meaning),name)
+				                        privsend("example: {0}".format(example),name)
+                            				privsend("this is where you can get more definitions: {0}".format(url),name)
+							if VERBOSE: log("{0} - {1}\nExample: {2}\nMore Info: {3}".format(word,meaning,example,url))
 
 					# WEATHER
-                                        if info[0].lower() == 'weather':
-                                                degrees = " F"
-                                                try:
-                                                        where = info[1:]
-                                                except IndexError:
-                                                        if special == 0: send("the weather of space is cold and dark")
-                                                        else: usernick = getNick(data); privsend("the weather of space is cold and dark",usernick)
-                                                        continue
-                                                where = " ".join(where)
-                                                where = "".join(c for c in where if c not in ('\n','\r','\t'))
-                                                if VERBOSE: log("Get weather for {0}".format(where))
-                                                weather = getWeather(where)
-                                                if weather == "~*404" or weather is None:
-                                                        if special == 0: send("i dont know where dat iz")
-                                                        else: usernick = getNick(data); privsend("i dont know where dat iz",usernick)
-                                                        if VERBOSE: log("Nothing found.")
-                                                        continue
-                                                if special == 0:
-                                                        send("weather for {0}:".format(weather['location']))
-                                                        send("currently {0} at {1}{2} (feels like {6}{2}). visibility is at {5} miles. humidity is currently {3}%, with an atmospheric pressure of {4}psi".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']))
-                                                        send("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],weather['sunrise'],weather['sunset']))
+					if info[0].lower() == 'weather':
+						degrees = 'F'
+						try:
+							where = info[1:]
+						except IndexError:
+							if special == 0: send("the weather of space is cold and dark",getChannel(data))
+							else: usernick = getNick(data); privsend("the weather of space is cold and dark",usernick)
+							continue
+						where = " ".join(where)
+						where = "".join(c for c in where if c not in ('\n','\r','\t'))
+						if VERBOSE: log("Get weather for {0}".format(where))
+						weather = getWeather(where)
+						if weather == "~*404" or weather is None:
+							if special == 0: send("i dont know where dat iz",getChannel(data))
+							else: usernick = getNick(data); privsend("i dont know where dat iz",usernick)
+							if VERBOSE: log("Nothing found.")
+							continue
+						if special == 0:
+							send("weather for {0}:".format(weather['location']),getChannel(data))
+							send("currently {0} at {1}{2} (feels like {6}{2}). visibility is at {5} miles. humidity is currently {3}%, with an atmospheric pressure of {4}psi".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']),getChannel(data))
+							send("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],weather['sunrise'],weather['sunset']),getChannel(data))
+
+					# WOLFRAM ALPHA
+					if info[0].lower() == 'calc':
+						try:
+							eq = info[1:]
+						except IndexError:
+							if special == 0: 
+								if "vindiesel" in getNick(data).replace('_','').lower(): send("i cant divide by zero.  only you can.",getChannel(data))
+								else: send("only vin diesel can divide by zero",getChannel(data))
+							else:
+								if "vindiesel" in getNick(data).replace('_','').lower(): privsend("i cant divide by zero.  only you can.",getNick(data))
+								else: privsend("only vin diesel can divide by zero",getNick(data))
+							continue
+						eq = " ".join(eq)
+						eq = "".join(c for c in eq if c not in ('\n','\r','\t'))
+						if VERBOSE: log("Wolfram Calculation for: {0}".format(eq))
+						send("ok let me put on my thinking cap one sec..",getChannel(data))
+						calcAnswers,calcURL = addTwoPlusTwo(eq)
+						if not calcAnswers or calcAnswers is None:
+							send("im not going to even bother calculating that.",getChannel(data))
+							continue
+						else:
+							if VERBOSE: log("Answers:")
+							for thing in calcAnswers:
+								try:
+									if VERBOSE: log(thing)
+									send(thing,getChannel(data))
+								except:
+									pass
+							send("more info: {0}".format(calcURL),getChannel(data))
+						
 		
 					# PODCAST INFO
-					if any(info[0].lower() in s for s in podcast_keywords):
-						if special == 0: send("ok one sec...")
+					if (info[0].lower() in podcast_keywords):
+						if special == 0: send("ok one sec...",getChannel(data))
 						else: usernick = getNick(data); privsend("one sec",usernick)
 						time.sleep(1.5)
-						html = urllib2.urlopen('http://www.greynoi.se/feeds/json')
-						getjson = html.read()
+						feed = feedparser.parse("https://greynoi.se/feed")
+												
 						if special == 0:
-							send("latest episode: {0}".format(jsontitle(getjson)))
+							send("latest episode: {0}".format(feed["entries"][0]["title_detail"]["value"]),getChannel(data))
 							time.sleep(1.5)
-							send("description: {0}".format(jsondesc(getjson).replace("\\\"","\"")))
+							send("description: {0}".format(feed["entries"][0]["summary_detail"]["value"]),getChannel(data))
 							time.sleep(1.5)
-							send("more info: {0}".format(jsonurl(getjson)))
+							send("more info: {0}".format(feed["entries"][0]["id"]),getChannel(data))
 							time.sleep(1.5)
-							send("ok im done now thx")
+							send("ok im done now thx",getChannel(data))
 						else:
 							name = getNick(data)
-							privsend("latest episode: {0}".format(jsontitle(getjson)),name)
-                                                        time.sleep(1.5)
-                                                        privsend("description: {0}".format(jsondesc(getjson)),name)
-                                                        time.sleep(1.5)
-                                                        privsend("more info: {0}".format(jsonurl(getjson)),name)
-                                                        time.sleep(1.5)
-                                                        privsend("ok im done now thx",name)
-						if VERBOSE: log("Episode: {0}\nDescription: {1}\nURL: {2}".format(jsontitle(getjson),jsondesc(getjson),jsonurl(getjson)))
+							privsend("latest episode: {0}".format(feed["entries"][0]["title_detail"]["value"]),name)
+        				                time.sleep(1.5)
+				                        privsend("description: {0}".format(feed["entries"][0]["summary_detail"]["value"]),name)
+				                        time.sleep(1.5)
+				                        privsend("more info: {0}".format(feed["entries"][0]["id"]),name)
+				                        time.sleep(1.5)
+				                        privsend("ok im done now thx",name)
+						if VERBOSE: log("Episode: {0}\nDescription: {1}\nURL: {2}".format(feed["entries"][0]["title_detail"]["value"],feed["entries"][0]["summary_detail"]["value"],feed["entries"][0]["id"]))
+						
 	
 					# HELP
-					if any(info[0].lower() in s for s in help_keywords):
+					if (info[0].lower() in help_keywords):
 						name = getNick(data)
 						if len(info) == 1:
-							if special == 0: send("geez are you slow or something god.  check your pms")
+							if special == 0: send("geez {} are you slow or something god.  check your pms".format(name),getChannel(data))
 							privsend("%op <user> -=- allows you to op the specified <user>. only works if youre a podcaster.", name)
 							time.sleep(.5)
 							privsend("%topic <topic> -=- allows you to change the <topic>.  only works if youre a podcaster.", name)
@@ -687,9 +988,27 @@ def main(joined):
 							privsend("%ping <user> <message>",name)
 							privsend("this sends a message to a specified user via slack. slack will notify a users phone when it receives a message.",name)
 							privsend("if you want to be able to be pinged, let bgm know, along with your email address, and hell send you an invite.",name)
+							privsend("already sent bgm your email?  Type %slack add <YOUR_SLACK_USERNAME> to set your slack username.",name)
 							privsend("----------------------",name)
 							privsend("<user> - can be any slack username or someone in chat.",name)
 							privsend("<message> - optional. can be any message.",name)
+							privsend("----------------------",name)
+							privsend("PING SELF COMMANDS AND REMINDERS",name)
+							privsend("%ping me <message>",name)
+							privsend("ping yourself with an optional message.",name)
+							privsend("----------------------",name)
+							privsend("<message> - optional. can be any message.",name)
+							privsend("----------------------",name)
+							privsend("%ping me when <name> <command>",name)
+							privsend("set yourself a ping reminder",name)
+							privsend("----------------------",name)
+							privsend("<name> - the username of someone else in chat.",name)
+							privsend("<command> - commands could be the following:",name)
+							privsend(" -> 'is alive' - sends you a ping when <name> unidles in chat.",name)
+							privsend(" -> 'joins' - sends you a ping when <name> joins the chat.",name)
+							privsend("example: %ping me when bgm is alive",name)
+							privsend("this will send you a ping when bgm unidles in chat.",name)
+							privsend("----------------------",name)
 						if len(info) > 1 and info[1].strip('\r\n').lower() == 'reminders':
 							privsend("%remindme/%remind me <timeframe> - <message>",name)
 							privsend("set yourself a reminder for some time	to do something. when the time comes, youll be notified in here 3 different ways, and if you have a slack",name)
@@ -700,16 +1019,16 @@ def main(joined):
 							privsend("<message> - message is required, and must be separated from the <timeframe> by a single dash (-).",name)
 	
 					# OVERLORD
-					if any(info[0].lower() in s for s in overlord_keywords):
+					if (info[0].lower() in overlord_keywords):
 						sender = getNick(data)
 						afile = open('overlord.txt', 'rb')
 						line = rline(afile)
 						afile.close()
-						send("when i am an evil overlord, {0}".format(line)) if special == 0 else privsend("when i am an evil overlord, {0}".format(line),sender)
+						send("when i am an evil overlord, {0}".format(line),getChannel(data)) if special == 0 else privsend("when i am an evil overlord, {0}".format(line),sender)
 						if VERBOSE: log("Overlord: {0}".format(line))
-		
+	
 					# MEMOS
-					if any(info[0].lower() in s for s in memo_keywords):
+					if (info[0].lower() in memo_keywords):
 						#--
 						# This is the Memos feature.  It allows a user to set a memo for another inactive user.
 						# It stores the memo in an external file.
@@ -717,49 +1036,45 @@ def main(joined):
 						# deletes the line so it never resends.  The message sending is handles at the very
 						# bottom of this script.  This is just to set the memo:
 						#--
-						if special == 1: name = getNick(data); privsend("you can only leave a memo in a public channel.  try this in {0}".format(channel),name); continue
+						if special == 1: name = getNick(data); privsend("you can only leave a memo in a public channel.  try this in {0}".format(defchannel),name); continue
 						message = info[1:]
 						fromnick = getNick(data)
 						try:
 							tellnick = message[0]
 						except IndexError:
-							send("{0} you dickmunch you need to specify a person".format(fromnick))
+							send("{0} you dickmunch you need to specify a person".format(fromnick),getChannel(data))
 							continue
 						if tellnick.lower() == botname.lower():
-							send("why would i want to leave myself a memo tho")
+							send("why would i want to leave myself a memo tho",getChannel(data))
 							continue
 						if tellnick.lower() == fromnick.lower():
-							send("ok sure thing.")
+							send("ok sure thing.",getChannel(data))
 							time.sleep(3)
-							send("hey {0}, {0} says youre an idiot.".format(fromnick))
+							send("hey {0}, {1} says youre an idiot.".format(fromnick,botname.lower()),getChannel(data))
 							continue
-						sendraw("NAMES {0}".format(channel))
-                                                channicks = getChatters()
-                                                for i in channicks:
-                                                        if tellnick.lower() in i.lower(): tellnick = i
 						try:
 							message = " ".join(message[1:])
-							message = message.strip(' \t\r\n')
+							message = message.translate(None, "\t\r\n")
 						except IndexError:
-							send("{0} get some %help.  actually, learn to read first, then get some %help.".format(fromnick))
+							send("{0} get some %help.  actually, learn to read first, then get some %help.".format(fromnick),getChannel(data))
 							time.sleep(.1)
 							continue
 						if not message: 
-							send("{0} get some %help.  actually, learn to read first, then get some %help.".format(fromnick))
+							send("{0} get some %help.  actually, learn to read first, then get some %help.".format(fromnick),getChannel(data))
 							time.sleep(.1)
 							continue
 						f = open('memos', 'a')
 						f.write("{0}[-]{1}[-]{2}\n".format(fromnick,tellnick,message))
 						f.close()
 						if VERBOSE: log("{0} says \"Tell {1} {2}\"".format(fromnick, tellnick, message))
-						send("ok ill tell {0} that you hate everything about them forever.".format(tellnick))
-					
+						send("ok ill tell {0} that you hate everything about them forever.".format(tellnick),getChannel(data))
+	
 					# ROLL DICE
 					if info[0].lower() == 'roll':
 						try:
 							totalroll = info[1]
 						except:
-							if special == 0: send("you need to specify a roll, like d20 or 2d10 or something.")
+							if special == 0: send("you need to specify a roll, like d20 or 2d10 or something.",getChannel(data))
 							else: usernick = getNick(data); privsend("you need to specify a roll, like d20 or 2d10 or something.",usernick)
 							continue
 						try:
@@ -774,15 +1089,15 @@ def main(joined):
 						try:
 							sides =	int(totalroll[1])
 						except:
-							if special == 0: send("you need to specify the amount of sides, like d20 or d10")
+							if special == 0: send("you need to specify the amount of sides, like d20 or d10",getChannel(data))
 							else: usernick = getNick(data); privsend("you need to specify the amount of sides, like d20 or d10",usernick)
 							continue
 						if rolls < 1: 
-							if special == 0: send("im assuming you want at least one roll")
+							if special == 0: send("im assuming you want at least one roll",getChannel(data))
 							else: usernick = getNick(data); privsend("im assuming you want at least one roll",usernick)
 							rolls = 1
 						if sides < 1:
-							if special == 0: send("ok let me just break the space-time continuum for you.")
+							if special == 0: send("ok let me just break the space-time continuum for you.",getChannel(data))
 							else: usernick = getNick(data); privsend("ok let me just break the space-time continuum for you.")
 							continue
 						equation = []
@@ -800,15 +1115,15 @@ def main(joined):
 								equation = '{0} = {1}'.format(equation,total)
 								if '-nolow' in printlow: equation = '{0}. without the lowest roll: {2} - {3} = {1}'.format(equation,total-int(lowest),total,int(lowest))
 							elif rolls == 1: equation = "heres your roll: {0}".format(total)
-							if special == 0: send(equation)
+							if special == 0: send(equation,getChannel(data))
 							else: usernick = getNick(data); privsend(equation,usernick)
 						except OverflowError:
-							if special == 0: send("dude for real tho: http://www.wolframalpha.com")
-							else: usernick = getNick(data); privsend("dude for real tho: http://www.wolframalpha.com", usernick)
+							if special == 0: send("lets just say you rolled a natural 20",getChannel(data))
+							else: usernick = getNick(data); privsend("lets just say you rolled a natural 20", usernick)
 							continue
 				
 					# GET A TWITTER FEED
-					if any(info[0].lower() in s for s in showtwitter_keywords) and TWITTER_ENABLED:
+					if (info[0].lower() in showtwitter_keywords and info[0].lower() != "tweet") and TWITTER_ENABLED:
 						#--
 						# Get the latest tweet from a specified username, or, if no username is specified,
 						# get the latest tweet from a random follower.
@@ -818,58 +1133,54 @@ def main(joined):
 							tweetnick = info[1]
 						except IndexError: # No username specified, so get a tweet from a random follower.
 							try:
-				                                fol = getRandomFollower() # Check twitbot.py for this and other twitter functions
-				                        except tweepy.error.TweepError as e:
-								print "error"
-				                                if e.message[0]['code'] == 88:
+								fol = getRandomFollower() # Check twitbot.py for this and other twitter functions
+				            		except (Exception, tweepy.error.TweepError) as e:
+								if VERBOSE: log("Tweepy error: {0}".format(str(e)))
+								sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+								if e.message[0]['code'] == 88:
 									print "rate limit: {0}".format(getRateLimit())
-									send("im making too many calls to twitter and the twitter hates when i do that.  try again later.")
-				                                        continue
-				                        send("lets see what one of my followers, {0}, is doing on twitter...".format(fol))
-				                        time.sleep(1)
-				                        mag = getTweet(fol)
-				                        for tweet in mag:
-				                        	try: # Is the message a retweet?  Let's grab it and specify that it's an RT
-		                                                        mag = tweet.retweeted_status.text
-		                                                        getrt = tweet.text.encode('utf-8','ignore') # Encode the message to be safe.
-		                                                        getrt = getrt.split('@')[1].split(':')[0]
-		                                                        mag = "RT @{0}: {1}".format(getrt,mag)									
-		                                                except AttributeError:
-		                                                        mag = tweet.text.encode('utf-8', 'ignore')
-	        	                                                mag = "".join(c for c in mag if c not in ('\t'))
-		                                                mag = mag.replace('\r', ' ')
-		                                                mag = mag.replace('\n', ' ')
-		                                                send("@{0} >> {1}".format(fol,mag))
-								if VERBOSE: log("@{0} >> {1}".format(fol,mag))
-							        send("follow {} to get your tweets in here".format(twittername))
+									send("im making too many calls to twitter and the twitter hates when i do that.  try again later.",getChannel(data))
+					                continue
+				           	send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),getChannel(data))
+				            	time.sleep(1)
+					        mag = getTweet(fol)
+					        for tweet in mag:
+				        	        try: # Is the message a retweet?  Let's grab it and specify that it's an RT
+								mag = tweet.retweeted_status.text
+					                        getrt = tweet.text.split('@')[1].split(':')[0]
+					                        mag = "RT @{0}: {1}".format(getrt,mag)									
+							except AttributeError as e:
+								if VERBOSE: log("Non-fatal issue with tweet: {0}".format(str(e)))
+								mag = tweet.text
+							fol = fol.encode('utf-8')
+							send("@{0} >> {1}".format(fol,mag),getChannel(data))
+							if VERBOSE: log("@{0} >> {1}".format(fol,mag))
+							send("follow {} to get your tweets in here".format(twittername),getChannel(data))
 							continue
 						tweetnick = "".join(c for c in tweetnick if c not in ('\r', '\n', '\t')) # Strip any weird formatting in the user name.  Yes, this is a thing that happens.
 						msg = getTweet(tweetnick)
 						if VERBOSE: log("Twitter Handle: {0}".format(tweetnick))
 						if msg == "-*404":
-							send("that person doesnt really exist tho")
+							send("that person doesnt really exist tho",getChannel(data))
 							if VERBOSE: log("Doesn't Exist")
 							continue
 						if msg == "-*501":
-							send("@{0}'s profile is private and bigoted and hates synackbot because they wont let me follow them, so i cant see their tweets".format(tweetnick))
+							send("@{0}'s profile is private and bigoted and hates synackbot because they wont let me follow them, so i cant see their tweets".format(tweetnick),getChannel(data))
 							if VERBOSE: log("Not Authorized")
 							continue
 						if len(msg) == 0:
-							send("@{0} doesnt have no tweets yet".format(tweetnick))
+							send("@{0} doesnt have no tweets yet".format(tweetnick),getChannel(data))
 							if VERBOSE: log("Doesn't have any tweets")
 						for tweet in msg:
 							try:
 								msg = tweet.retweeted_status.text
-								getrt = tweet.text.encode('utf-8','ignore')
-								getrt = getrt.split('@')[1].split(':')[0]
+								getrt = tweet.text.split('@')[1].split(':')[0]
 								msg = "RT @{0}: {1}".format(getrt,msg)
-							except AttributeError:
-								msg = tweet.text.encode('utf-8', 'ignore')
-								msg = "".join(c for c in msg if c not in ('\t'))
-							msg = msg.replace('\r', ' ')
-							msg = msg.replace('\n', ' ')
+							except (AttributeError, UnicodeEncodeError) as e:
+								if VERBOSE: log("Non-fatal issue with tweet: {0}".format(str(e)))
+								msg = tweet.text
 							tweetnick = tweetnick.encode('utf-8')
-							send("@{0} >> {1}".format(tweetnick,msg))
+							send("@{0} >> {1}".format(tweetnick,msg),getChannel(data))
 							if VERBOSE: log("@{0} >> {1}".format(tweetnick, msg))
 	
 					# POST A TWEET
@@ -884,40 +1195,42 @@ def main(joined):
 						try:
 							q = info[1:]
 						except IndexError:
-							send("you need to actually tweet something") if special == 0 else privsend("you need to actually tweet something",sender)
+							send("you need to actually tweet something",getChannel(data)) if special == 0 else privsend("you need to actually tweet something",sender)
 							continue
 						if len(q) == 0:
-							send("you didnt tweet anything dumby") if special == 0 else privsend("you didnt tweet anything dumby",sender)
+							send("you didnt tweet anything dumby",getChannel(data)) if special == 0 else privsend("you didnt tweet anything dumby",sender)
 							continue
 						if q[0] == '%overlord\r\n':	# Did the user want to tweet an overlord quote?
-							 afile = open('overlord.txt', 'rb')
-	                                                 q = "{0}".format(rline(afile))
+							afile = open('overlord.txt', 'rb')
+				                        q = "{0}".format(rline(afile))
 						else:
 							q = " ".join(q)
 						q = "{0}: {1}".format(fromnick,q)
 						q = (q[:137] + '...') if len(q) > 140 else q
 						if postTweet(q) == "DUPLICATE":
-							send("you already said that dummy")
+							send("you already said that dummy",getChannel(data))
 							continue 
 						if VERBOSE: log("{0} tweeted: {1}".format(fromnick, q))
 						sendraw("NAMES {0}".format(channel))
-						person = getRandomPerson()
-						send("ok i tweeted that. i hope i didnt sound like a stupid racist like {0}.".format(person)) if special == 0 else privsend("ok i tweeted that i hope i didnt sound like a stupid racist like you",sender)
+						time.sleep(1)
+						rawdata = irc.recv(1024)
+						person = getRandomPerson(rawdata)
+						send("ok i tweeted that. i hope i didnt sound like {0}.".format(person),getChannel(data)) if special == 0 else privsend("ok i tweeted that i hope i didnt sound like you",sender)
 						time.sleep(1)
 
 					# SET A REMINDER
-					if any(info[0].lower() in s for s in reminder_keywords):
+					if (info[0].lower() in reminder_keywords):
 						if len(info) < 3 or "-" not in info:
-							if special == 0: send("ok so %help reminders is probably more your thing.")
+							if special == 0: send("ok so %help reminders is probably more your thing.",getChannel(data))
 							else: usernick = getNick(data); privsend("ok so %help reminders is probably more your thing.",usernick)
 							continue							
 						try:
 							if info[0].lower() == 'remind' and info[1].lower() != 'me':
-								if special == 0: send("you might want to check %help reminders")
+								if special == 0: send("you might want to check %help reminders",getChannel(data))
 								else: usernick = getNick(data); privsend("you might want to check %help reminders",usernick)
 								continue
 						except:
-							if special == 0: send("ok so %help reminders is probably more your thing.")
+							if special == 0: send("ok so %help reminders is probably more your thing.",getChannel(data))
 							else: usernick = getNick(data); privsend("ok so %help reminders is probably more your thing.",usernick)
 							continue
 						alreadyset = 0
@@ -928,7 +1241,7 @@ def main(joined):
 							if info[0].lower() == 'remindme': message = info[1:]
 							if info[0].lower() == 'remind' and info[1].lower() == 'me': message = info[2:]
 						except: 
-							if special == 0: send("heres your reminder: 1) learn to read, 2) read %help")
+							if special == 0: send("heres your reminder: 1) learn to read, 2) read %help",getChannel(data))
 							else: usernick = getNick(data); privsend("heres your reminder: 1) learn to read, 2) read %help",usernick)
 							continue
 						message = " ".join(message)
@@ -936,31 +1249,31 @@ def main(joined):
 							reminddate = message.split('-',1)[0].strip()
 							message = message.split('-',1)[1:]
 						except:
-							if special == 0: send("did you put in a date for the reminder? %help reminders")
+							if special == 0: send("did you put in a date for the reminder? %help reminders",getChannel(data))
 							else: usernick = getNick(data); privsend("did you put in a date for the reminder? %help reminders",usernick)
 							continue
 						message = " ".join(message)
 						try:
 							reminddate = cal.parse(reminddate)
 						except:
-							if special == 0: send("did you put in a date for the reminder? %help reminders")
-                                                        else: usernick = getNick(data); privsend("did you put in a date for the reminder? %help reminders",usernick)
+							if special == 0: send("did you put in a date for the reminder? %help reminders",getChannel(data))
+                            				else: usernick = getNick(data); privsend("did you put in a date for the reminder? %help reminders",usernick)
 							continue
 						try:
 							checkdate = datetime.datetime.fromtimestamp(time.mktime(reminddate[0]))
 						except OverflowError:
-							if special == 0: send("no youll be dead by then")
+							if special == 0: send("no youll be dead by then",getChannel(data))
 							else: usernick = getNick(data); privsend("no youll be dead by then",usernick)
 							continue
 						timefloat = time.mktime(reminddate[0])
 						if timefloat <= time.time():
-							if special == 0: send("ok let me just go hop in my time machine")
-							else: usernick = getNick(data); privsend("ok let me just go hop in my time machine",usernick)
-                                                        continue
+							if special == 0: send("ok let me just go hop in my time machine",getChannel(data))
+							else: usernick = getNick(data); privsend("ok let me just go hop in my time machine",usernick); print timefloat; print time.time();
+				                        continue
 						try:
 							reminddate = checkdate
 						except:
-							if special == 0: send("that doesnt make any sense.")
+							if special == 0: send("that doesnt make any sense.",getChannel(data))
 							else: usernick = getNick(data); privsend("that doesnt make any sense",usernick)
 							continue
 						with open('reminders','r+') as f:
@@ -969,13 +1282,13 @@ def main(joined):
 							for line in lines:
 								thisline = line.split('[-]')
 								if thisline[0] == getNick(data) and timefloat < float(thisline[1]) < timefloat + 30.0:
-									if special == 0: send("are you reminding me to remind you or do you have short-term memory loss?")
+									if special == 0: send("are you reminding me to remind you or do you have short-term memory loss?",getChannel(data))
 									else: usernick = getNick(data); privsend("are you reminding me to remind you or do you have short-term memory loss?")
 									f.write(line)
 									alreadyset = 1
 									break
 								elif thisline[0] == getNick(data) and time.time() < float(thisline[3]) + 120.0:
-									if special == 0: send("hey calm down with the reminders, guy")
+									if special == 0: send("hey calm down with the reminders, guy",getChannel(data))
 									else: usernick = getNick(data); privsend("hey calm down with the reminders, guy",usernick)
 									f.write(line)
 									alreadyset = 1
@@ -987,23 +1300,54 @@ def main(joined):
 							if alreadyset == 0:
 								if VERBOSE: log("{0} set a reminder for {1}: {2}".format(getNick(data),reminddate.strftime("%m/%d/%y %H:%M:%S"),message.lstrip()))
 								f.write("{0}[-]{1}[-]{2}[-]{3}\r\n".format(getNick(data),timefloat,message.lstrip().strip('\r\n'),time.time()))
-								if special == 0: send("k reminder set for {0}".format(reminddate.strftime("%m/%d/%y %H:%M:%S")))
+								if special == 0: send("k reminder set for {0}".format(reminddate.strftime("%m/%d/%y %H:%M:%S")),getChannel(data))
 								else: usernick = getNick(data); privsend("k reminder set for {0}".format(reminddate.strftime("%m/%d/%y %H:%M:%S")),usernick)
 							f.truncate()
 							f.close()
-			
+
+					# SLACK COMMANDS
+					if (info[0].lower() == 'slack' and PING_ENABLED):
+						if len("".join(info[3:])) == 0:
+							if info[1].lower() == 'add':
+								user = getNick(data)
+								alias = info[2]
+								alias = alias.translate(None, "\t\r\n")
+								alias = alias.strip('@')
+								if not findSlacker(alias):
+									send("um youre not on the slackers list.  better send bgm your email address so he can add you.",getChannel(data))
+									continue
+								with open('slack_aliases','r+') as f:
+									lines = f.readlines()
+									f.seek(0)
+									found = 0
+									for line in lines:
+										if user == line.split('[-]')[0]:
+											send("your slack name has already been added to the list",getChannel(data))
+											found = 1
+										f.write(line)
+									if found == 0:
+										f.write("{0}[-]{1}\n".format(user,alias))
+										send("ok ive added you to thelist",getChannel(data))
+									f.close()							
+						else:
+							send("im pretty sure your slack username is supposed to be one word",getChannel(data))
+
 					# PING
 					if info[0].lower() == 'ping' and PING_ENABLED:
 						if special == 1: name = getNick(data); privsend("you can only ping someone from a public channel.  try this in {0}".format(channel),name); continue
 						try:
 							touser = info[1]
 						except:
-							send("ping who now?")
+							send("ping who now?",getChannel(data))
 							continue
 						touser = touser.strip('@')
-						touser = touser.strip(' \r\n')
+						touser = touser.translate(None, "\t\r\n")
+						if touser.lower() == "me":
+                            				touser = getNick(data)
 						sendraw("NAMES {0}".format(channel))
-                                                channicks = getChatters()
+						time.sleep(1)
+						rawdata = irc.recv(1024)
+			                        channicks = getChatters(rawdata)
 						for i in channicks:
 							if touser.lower() in i.lower(): touser = i
 						try:
@@ -1011,69 +1355,122 @@ def main(joined):
 						except:
 							msg = "alive?"
 						msg = msg.strip('\r\n')
-						if not msg: msg = "alive?"
-						if VERBOSE: log("Ping request sent from: {0}, to: {1}, with this message: {2}".format(getNick(data),touser,msg))
-						message = sendPing(getNick(data),touser,msg)
-						if message != "Sent!":
-							send(message)
-							continue
-						send("ok i pinged {0} for you now pay me $1.".format(touser))
+						if msg.split(' ')[0].lower() == "when" and (" ".join(msg.split(' ')[2:]).lower() == "is alive" or msg.split(' ')[2].lower() == "joins"):
+							if msg.split(' ')[1] == touser or msg.split(' ')[1] == botname:
+								send("dont be dumn",getChannel(data))
+								continue
+							else:
+								found = 0
+								compline = "{0}[-]{1}\n".format(touser,msg.split(' ')[1])
+								with open('pings','r') as f:
+									f.seek(0)
+									lines = f.readlines()
+									for line in lines:
+										if line == compline:
+											send("you already asked me to let you know when {0} stops being a chump.  go away".format(msg.split(' ')[1]),getChannel(data))
+											found = 1
+											continue
+									f.close()
+								if found == 1: 
+									continue
+								if touser == getNick(data):
+									if (" ".join(msg.split(' ')[2:]).lower() == "is alive"):
+										sendraw("NAMES {0}".format(channel))
+										time.sleep(1)
+										rawdata = irc.recv(1024)					
+										channicks = getChatters(rawdata)
+										found = 0
+										for i in channicks:
+											if (msg.split(' ')[1].translate(None, "\t\r\n").lower() in i.lower()) and found == 0:
+												f = open('pings', 'a')
+												f.write(compline)
+												send("ok you got it boss",getChannel(data))
+												found = 1
+										if found == 0:
+											send("i dont know who dat is",getChannel(data))
+									else:
+										sendraw("NAMES {0}".format(channel))
+	                                    					time.sleep(1)
+						                                rawdata = irc.recv(1024)
+						                                channicks = getChatters(rawdata)
+	                                    					found = 0
+						                                for i in channicks:
+						                                        if msg.split(' ')[1].translate(None, "\t\r\n").lower() in i.lower():
+												send("that person already joined dumby. ill let you know when they arent idle instead",getChannel(data))
+												found = 1
+										if found == 0:
+											send("ok you got it boss",getChannel(data))
+											f = open('pings', 'a')
+		                                    					f.write(compline)
+										else:
+											send("dont make me be the bad guy. you spam {0}s cell phone with your dumb requests.".format(touser),getChannel(data))
+						else:	
+							if not msg: msg = "alive?"
+							if VERBOSE: log("Ping request sent from: {0}, to: {1}, with this message: {2}".format(getNick(data),touser,msg))
+							message = sendPing(getNick(data),touser,msg)
+							if message != "Sent!":
+								send(message,getChannel(data))
+								continue
+							send("ok i pinged {0} for you now pay me $1.".format(touser),getChannel(data))
 			
 					# WIKIPEDIA
-					if any(info[0].lower() in s for s in wiki_keywords) and WIKIPEDIA_ENABLED:
-						#--
-						# Look up a word on Wikipedia and return the first sentence of the summary, as well as
+					if (info[0].lower() in wiki_keywords) and WIKIPEDIA_ENABLED:
 						# the url to the article and other things to search for.
 						#--
 						sender = getNick(data)
 						try:
 							q = info[1:]
 						except IndexError:
-							send("whatchuwanna wiki, friend") if special == 0 else privsend("whatchuwanna wiki, friend",sender)
+							send("whatchuwanna wiki, friend",getChannel(data)) if special == 0 else privsend("whatchuwanna wiki, friend",sender)
 							continue
 						q = " ".join(q)
 						if VERBOSE: log("Wiki: {0}".format(q))
 						result = wiki(q) # See wiki.py for more info on is and other wiki functions.
 						if result == "-*e":
-							send("that clearly doesnt exist") if special == 0 else privsend("that clearly doesnt exist",sender)
+							send("that clearly doesnt exist",getChannel(data)) if special == 0 else privsend("that clearly doesnt exist",sender)
 							continue
-						if special == 0: send("ok one sec")
+						if special == 0: send("ok one sec",getChannel(data))
 						else: name = getNick(data); privsend("ok one sec",name)
 						time.sleep(1)
 						if result[0] == "-*d":
 							if len(result) > 10:
-	                                                        result = result[1:10]
-	                                                        result.append("etc...")
+	                            				result = result[1:10]
+					                        result.append("etc...")
 							result = ", ".join(result)
-							result = result.encode('utf-8').lower()
-							result = "".join(c for c in result if c not in ('\'','"','!',':',';'))
 							if special == 0:
-								send("theres a lot of stuff you could mean by that.")
+								send("theres a lot of stuff you could mean by that.",getChannel(data))
 								time.sleep(.5)
-								send("stuff like: {0}".format(result))
+								send("stuff like: {0}".format(result),getChannel(data))
 							else: 
 								name = getNick(data)
 								privsend("theres a lot of stuff you could mean by that.",name)
-                                                                time.sleep(.5)
-                                                                privsend("stuff like: {0}".format(result),name)
-							continue
+				                                time.sleep(.5)
+                                				privsend("stuff like: {0}".format(result),name)
+								continue
 						else:					
 							url = result[0]
 							desc = result[1]
-							desc = desc.encode('utf-8').lower()
-							desc = "".join(c for c in desc if c not in ('\'','"','!',':',';'))
 							try:
 								search = result[2]
 							except IndexError:
 								search = 0
-							send(desc) if special == 0 else privsend(desc,sender)
 							time.sleep(.5)
-							send("more info here: {0}".format(url)) if special == 0	else privsend("more info here: {0}".format(url),sender)
-							if search != 0: 
-								search = (search[:497] + '...') if len(search) > 497 else search
-								search = search.lower()
+							try:
+								send(desc,getChannel(data)) if special == 0 else privsend(desc,sender)
+							except:
+								pass
+							time.sleep(.5)
+							try:
+								send("more info here: {0}".format(url),getChannel(data)) if special == 0 else privsend("more info here: {0}".format(url),sender)
+							except:
+								pass
+							if search != 0:
 								search = "".join(a for a in search if (a.isalnum() or a in (",",".","'","\"","?","!","@","#","$","%","^","&","*","(",")","_","+","=","-","\\","|","]","}","{","[",";",":","/",">","<","`","~"," ")))
-								send("see also: {0}".format(search)) if special == 0 else privsend("see also: {0}".format(search),sender)
+								time.sleep(1)
+								try:
+									send("see also: {0}".format(search),getChannel(data)) if special == 0 else privsend("see also: {0}".format(search),sender)
+								except:
+									pass
 							if VERBOSE: log("{0}\nMore Info: {1}\nSee Also: {2}".format(desc,url,search))
 					
 					# FIGHT
@@ -1081,8 +1478,8 @@ def main(joined):
 						#--
 						# This is the chat fight subroutine.
 						#--
-						if getChannel(data) != fightchan:
-							send("no we have a fight fightchan for this: /join {0}".format(fightchan))
+						if SequenceMatcher(None, getChannel(data).lower(), fightchan.lower()).ratio() < 0.92:
+							send("no we have a fight fightchan for this: /join {0}".format(fightchan),getChannel(data))
 							continue
 						channel = fightchan
 						try:
@@ -1113,8 +1510,10 @@ def main(joined):
 								f.close()
 							if infight == 0:
 								sendraw("NAMES {0}".format(fightchan))
+								time.sleep(1)
+								rawdata = irc.recv(1024)
 		                                                person = getRandomPerson()
-								while person.lower() == name.lower(): person = getRandomPerson()
+								while person.lower() == name.lower(): person = getRandomPerson(rawdata)
 								fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
 								continue
 						except:
@@ -1136,42 +1535,45 @@ def main(joined):
 							tmp = act[0].lower()
 						except IndexError:
 							name = getNick(data)
-                                                        infight = 0
-                                                        with open('fightsongoing','r') as f:
-                                                                lines = f.readlines()
-                                                                f.seek(0)
-                                                                for line in lines:
-                                                                        thisline = line.split('[-]')
-                                                                        p1,p2,accepted,whoseturn = thisline[0],thisline[1],thisline[2],thisline[3]
-                                                                        if p1.lower() == name.lower():
-                                                                                infight = 1
-                                                                                if int(accepted) == 1:
-                                                                                        fightsend("youre currently fighting {0} and its {1} turn.".format(p2,"your" if p1 == whoseturn else "{0}'s".format(p2)))
-                                                                                else:
-                                                                                        fightsend("you sent a fight invite to {0}, but they didnt accept it yet.".format(p2))
-                                                                                break
-                                                                        elif p2.lower() == name.lower():
-                                                                                infight = 1
-                                                                                if int(accepted) == 1:
-                                                                                        fightsend("youre currently fighting {0} and its {1} turn.".format(p1,"your" if p2 == whoseturn else "{0}'s".format(p1)))
-                                                                                else:
-                                                                                        fightsend("you were sent an invitation to fight from {0}. type %fight yes to accept or %fight no to decline.".format(p1))
-                                                                                break
-                                                                f.close()
-							if infight == 0:
-                                                                sendraw("NAMES {0}".format(fightchan))
-                                                                person = getRandomPerson()
-                                                                if person == "lonely":
-                                                                        fightsend("youre the only one in this chat. go find some friends.")
-                                                                        continue
-                                                                if person:
-                                                                        while person.lower() == name.lower(): person = getRandomPerson()
-                                                                        fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
-                                                                else: fightsend("you arent fighting anyone. go fight someone.")
-                                                                continue
-                                                        continue
-						except:
-							fightsend("i decided not to work today. let bgm know how lazy i am please.")
+                            				infight = 0
+				                        with open('fightsongoing','r') as f:
+                                				lines = f.readlines()
+				                                f.seek(0)
+                                				for line in lines:
+					                                thisline = line.split('[-]')
+					                                p1,p2,accepted,whoseturn = thisline[0],thisline[1],thisline[2],thisline[3]
+					                                if p1.lower() == name.lower():
+                                        					infight = 1
+										if int(accepted) == 1:
+						                                        fightsend("youre currently fighting {0} and its {1} turn.".format(p2,"your" if p1 == whoseturn else "{0}'s".format(p2)))
+					                                        else:
+                                        						fightsend("you sent a fight invite to {0}, but they didnt accept it yet.".format(p2))
+					                                        break
+					                                elif p2.lower() == name.lower():
+                                        					infight = 1
+					                                        if int(accepted) == 1:
+                                        						fightsend("youre currently fighting {0} and its {1} turn.".format(p1,"your" if p2 == whoseturn else "{0}'s".format(p1)))
+					                                        else:
+                                        						fightsend("you were sent an invitation to fight from {0}. type %fight yes to accept or %fight no to decline.".format(p1))
+					                                        break
+				                                f.close()
+				                        if infight == 0:
+								sendraw("NAMES {0}".format(fightchan))
+								time.sleep(1)
+								rawdata = irc.recv(1024)
+		                                                person = getRandomPerson(rawdata)
+								if person == "lonely":
+									fightsend("youre the only one in this chat. go find some friends.")
+									continue
+								if person:
+									while person.lower() == name.lower(): person = getRandomPerson(rawdata)
+									fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
+								else: fightsend("you arent fighting anyone. go fight someone.")
+				                                continue
+							continue
+						except Exception as e:
+							fightsend("i decided not to work today. i just let bgm know how lazy i am.")
+							sendPing("Gr3yBot","bgm",'Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 							continue
 
 						if act[0].lower() == "help":
@@ -1211,9 +1613,9 @@ def main(joined):
 								privsend("%fight stats (<name>) - get the stats of <name>, if no <name> specified, then get your own stats",name)
 								privsend("%fight cancel - cancel a fight. if the fight hasnt been accepted, theres no penalty, otherwise your opponent gets a win",name)
 								privsend("------",name)
-                                                                privsend("theres additional help available by typing one of the following commands:",name)
-                                                                privsend("%fight help actions - get more info on what each fight action does",name)
-                                                                privsend("%fight help stats - get more info on what each stat does",name)
+				                                privsend("theres additional help available by typing one of the following commands:",name)
+                                				privsend("%fight help actions - get more info on what each fight action does",name)
+				                                privsend("%fight help stats - get more info on what each stat does",name)
 								continue
 
 
@@ -1240,16 +1642,18 @@ def main(joined):
 							if challenger.lower() == botname.lower(): fightsend("im more of a lover than a fighter"); continue
 							if challenger.lower() == fighter.lower(): fightsend("no masochism allowed in chat thats like rule 3 or something."); continue
 							sendraw("NAMES {0}".format(fightchan))
-							channicks = getChatters()
+							time.sleep(1)
+							rawdata = irc.recv(1024)
+							channicks = getChatters(rawdata)
 							if not channicks: 
 								time.sleep(2)
-								channicks = getChatters()
+								channicks = getChatters(rawdata)
 							if not channicks:
 								fightsend("hold on the irc server is being a dick and something errored on the back end.  try again later.")
 								continue
 							i = 0
 							for j in channicks:
-								if challenger.strip(' \r\n').lower() == j.strip(' \r\n').lower(): i += 1
+								if challenger.translate(None, "\t\r\n").lower() == j.translate(None, "\t\r\n").lower(): i += 1
 							if i == 0: 
 								fightsend("i dont kno who that is")
 								continue
@@ -1283,8 +1687,8 @@ def main(joined):
 							f.close()
 							if readytofight == 1:
 								f = open('memos', 'a')
-		                                                f.write("{0}[-]{1}[-]Wanna fight? Come to {2} and type '%fight yes' or '%fight no'\n".format(fighter,challenger,fightchan))
-                		                                f.close()
+					                        f.write("{0}[-]{1}[-]Wanna fight? Come to {2} and type '%fight yes' or '%fight no'\n".format(fighter,challenger,fightchan))
+                					        f.close()
 								f = open('fightsongoing','a')
 								stopper = ''
 								f.write("{0}[-]{1}[-]0[-]{2}[-]0[-]{3}[-]{4}\r\n".format(fighter,challenger,challenger,time.time(),stopper))
@@ -1312,45 +1716,45 @@ def main(joined):
 											continue
 										if FIGHT_VERBOSE: log("{0} wants a rematch against {1}!".format(thisline[0],rematch))
 										with open('fightsongoing', 'r') as g:
-			                                                                for gline in g:
-			                                                                        initiator = gline.split('[-]')[0]
-			                                                                        who = gline.split('[-]')[1]
-			                                                                        accepted = gline.split('[-]')[2]
-                		                                                        	if thisline[0].lower() == initiator.lower():
-		                                                                                	if int(accepted) == 1:
-			                                                                                        fightsend("youre already fighting {0}. go finish that fight ok bye".format(who))
-                        			                                                                readytofight = 0
-                                                		        	                                break
-                 		                                               		                else:
+			                                				for gline in g:
+							 	                  		initiator = gline.split('[-]')[0]
+								                                who = gline.split('[-]')[1]
+								        	                accepted = gline.split('[-]')[2]
+												if thisline[0].lower() == initiator.lower():
+													if int(accepted) == 1:
+										                                fightsend("youre already fighting {0}. go finish that fight ok bye".format(who))
+													        readytofight = 0
+						                                                		break
+													else:
 														if initiator.lower() == rematch.lower():
-	        	                       	                                                		        fightsend("you already send a fight request to {0} so whats with the rematch request?".format(who))
+	        	                       								                fightsend("you already send a fight request to {0} so whats with the rematch request?".format(who))
 														else:
 															fightsend("you send a fight request to {0} already, so either cancel or wait before asking to rematch {1}".format(initiator,rematch))
-			                       	                                                                readytofight = 0
-                                                			                                        break
-				                                                                if thisline[0].lower() == who.lower():
-			                                                                                if int(accepted) == 1:
-                        			                                                                fightsend("youre already fighting {0}. go finish that fight ok bye".format(initiator))
-                                                			                                        readytofight = 0
-                                                                        			                break
-			                                                                                else:
-                        			                                                                fightsend("{0} has already challenged you to a fight. if you accept this challenge type %fight yes, if you dont, type %fight no".format(initiator))
-			                                                                                        readytofight = 0
-                        			                                                                break
-                                                			                        if rematch.lower() == initiator.lower() or rematch.lower() == who.lower():
-			                                                                                fightsend("everyone hates {0} and theyre already in a fight so wait your turn".format(rematch))
-                        			                                                        readytofight = 0
-                                                		                                break
+														readytofight = 0
+														break
+								                                if thisline[0].lower() == who.lower():
+			        		                			                if int(accepted) == 1:
+                        					                				fightsend("youre already fighting {0}. go finish that fight ok bye".format(initiator))
+														readytofight = 0
+							                                                        break
+			        					                                else:
+                        									                fightsend("{0} has already challenged you to a fight. if you accept this challenge type %fight yes, if you dont, type %fight no".format(initiator))
+			                                            						readytofight = 0
+														break	
+						                                		if rematch.lower() == initiator.lower() or rematch.lower() == who.lower():
+			                        					        	fightsend("everyone hates {0} and theyre already in a fight so wait your turn".format(rematch))
+					                       			                	readytofight = 0
+                                        						       	break
 										g.close()
-			                                                        if readytofight == 1:
-				                                                	g = open('memos', 'a')
-                                				                        g.write("{0}[-]{1}[-]Let's rematch! You'd better type '%fight yes' and not '%fight no'\n".format(thisline[0],rematch))
-                                                                			g.close()
-				                                                        g = open('fightsongoing','a')
-                                				                        stopper = ''
-                                                                			g.write("{0}[-]{1}[-]0[-]{2}[-]0[-]{3}[-]{4}\r\n".format(thisline[0],rematch,rematch,time.time(),stopper))
-				                                                        g.close()
-				                                                        fightsend("ok i will ask {0} if they want a rematch.".format(rematch))
+							                        if readytofight == 1:
+				                            				g = open('memos', 'a')
+				                                			g.write("{0}[-]{1}[-]Let's rematch! You'd better type '%fight yes' and not '%fight no'\n".format(thisline[0],rematch))
+                                						        g.close()
+								                        g = open('fightsongoing','a')
+				                                			stopper = ''
+                                						        g.write("{0}[-]{1}[-]0[-]{2}[-]0[-]{3}[-]{4}\r\n".format(thisline[0],rematch,rematch,time.time(),stopper))
+				                            				g.close()
+								                        fightsend("ok i will ask {0} if they want a rematch.".format(rematch))
 								if foundamatch == 0:
 									fightsend("um, did you ever fight before because i dont even know who you are. %fight help")
 							f.close()
@@ -1371,8 +1775,8 @@ def main(joined):
 								for line in lines:
 									initiator = line.split('[-]')[0]
 									opponent = line.split('[-]')[1]
-	                                                                who = line.split('[-]')[3]
-                	                                                accepted = line.split('[-]')[2]
+					                                who = line.split('[-]')[3]
+                	        				        accepted = line.split('[-]')[2]
 									stopper = line.split('[-]')[6].strip('\r\n')
 									if opponent.lower() == stopper.lower(): winner = initiator
 									if initiator.lower() == stopper.lower(): winner = opponent
@@ -1381,28 +1785,27 @@ def main(joined):
 										p1=getFighterStats(winner)
 										p2=getFighterStats(stopper)
 										fighting = 0
-		                                                                if FIGHT_VERBOSE: log("{1} quit, so {0} wins!".format(p1[0],p2[0]))
-		                                                                xp = getXPGain(p1[0],p1[0])
-		                                                                setFighterStats(fname=winner,tmpstat='',tmpbuff=0,xp=int(p1[7]) - int(xp[0]),hp=getMaxHPByLevel(int(p1[1])),wins=(int(p1[8])+1))
-		                                                                setFighterStats(fname=stopper,tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p2[1])))
+		                                				if FIGHT_VERBOSE: log("{1} quit, so {0} wins!".format(p1[0],p2[0]))
+						                                xp = getXPGain(p1[0],p1[0])
+		                				                setFighterStats(fname=winner,tmpstat='',tmpbuff=0,xp=int(p1[7]) - int(xp[0]),hp=getMaxHPByLevel(int(p1[1])),wins=(int(p1[8])+1))
+						                                setFighterStats(fname=stopper,tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p2[1])))
 										writeHistory(winner,stopper,"{0} canceled the fight! {1} won by default![-]==========================================[-]".format(stopper,winner))
-		                                                                fightsend("{0} wins by default!".format(winner))
-		                                                                fightsend("{0} gains {1} xp from the battle".format(winner,int(xp[0])))
-		                                                                fightsend("{0} gains nothing because theyre a coward".format(stopper))
+						                                fightsend("{0} wins by default!".format(winner))
+						                                fightsend("{0} gains {1} xp from the battle".format(winner,int(xp[0])))
+						                                fightsend("{0} gains nothing because theyre a coward".format(stopper))
 										p1 = getFighterStats(winner)
-			                                                        if int(p1[7]) <= 0:
-			                                                                fightsend("{0} leveled up!".format(winner))
+							                        if int(p1[7]) <= 0:
+			                                				fightsend("{0} leveled up!".format(winner))
 											if FIGHT_VERBOSE: log("{0} leveled!".format(winner))
-			                                                                results = levelUp(winner)
-			                                                                newstats = getFighterStats(winner)
-			                                                                privsend("hooray you leveled up.  heres a breakdown:",winner)
-			                                                                for i in results:
-			                                                                        privsend(i,winner)
-			                                                                privsend("here are your new stats:",winner)
-			                                                                privsend("level: {0}, attack: {1}, guard: {2}".format(newstats[1],newstats[2],newstats[3]),winner)
-			                                                                privsend("magic attack: {0}, magic guard: {1}, total hp: {2}".format(newstats[4],newstats[5],newstats[6]),winner)
-			                                                                privsend("xp to next level: {0}, total wins: {1}".format(newstats[7],newstats[8]),winner)
-			                                                                setFighterStats(fname=winner,atksincelvl=0,satksincelvl=0,fatksincelvl=0,magatksincelvl=0,grdsincelvl=0,mgrdsincelvl=0)
+							                                results = levelUp(winner)
+							                                newstats = getFighterStats(winner)
+							                                privsend("hooray you leveled up.  heres a breakdown:",winner)
+							                                for i in results: privsend(i,winner)
+							                                privsend("here are your new stats:",winner)
+							                                privsend("level: {0}, attack: {1}, guard: {2}".format(newstats[1],newstats[2],newstats[3]),winner)
+							                                privsend("magic attack: {0}, magic guard: {1}, total hp: {2}".format(newstats[4],newstats[5],newstats[6]),winner)
+							                                privsend("xp to next level: {0}, total wins: {1}".format(newstats[7],newstats[8]),winner)
+							                                setFighterStats(fname=winner,atksincelvl=0,satksincelvl=0,fatksincelvl=0,magatksincelvl=0,grdsincelvl=0,mgrdsincelvl=0)
 										continue
 									if (stopper and stopper.lower() != challenger.lower()) and (opponent.lower() == challenger.lower() or initiator.lower() == challenger.lower()) and int(accepted) == 1:
 										fightsend("no you dont get to choose this.  this is between me and {0}".format(winner))
@@ -1439,13 +1842,13 @@ def main(joined):
 								for line in lines:
 									initiator = line.split('[-]')[0]
 									opponent = line.split('[-]')[1]
-                                                                        who = line.split('[-]')[3]
-                                                                        accepted = line.split('[-]')[2]
+                               						who = line.split('[-]')[3]
+					                                accepted = line.split('[-]')[2]
 									stopper = line.split('[-]')[6].strip('\r\n')
 									print "STOPPER: {0}".format(stopper)
 									if getNick(data).lower() == initiator.lower(): person = opponent
 									if getNick(data).lower() == opponent.lower(): person = initiator
-                                                                        if (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()) and int(accepted) == 0:
+					                                if (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()) and int(accepted) == 0:
 										with open('memos','r+') as g:
 											glines = g.readlines()
 											g.seek(0)
@@ -1459,14 +1862,14 @@ def main(joined):
 											g.truncate()
 											g.close()
 										fightsend("wow. youre boring. ok then")
-                                                                        	continue
+                                        					continue
 									elif act[0].lower() != "no" and (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()) and int(accepted) == 1 and not stopper:
 										fightsend("what seriously?  if you stop the fight now {0} will still get full credit for winning. are you sure you want to stop? %fight yes or %fight no".format(person))
 										f.write("{0}[-]{1}[-]1[-]{2}[-]1[-]{3}[-]{4}\r\n".format(initiator,opponent,who,time.time(),getNick(data)))
 										continue
 									elif act[0].lower() != "no" and (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()) and int(accepted) == 1 and (stopper and stopper.lower() != getNick(data).lower()):
-                                                                                fightsend("{0} is already trying to give you a victory, just shh ok?".format(stopper))
-                                                                                f.write(line)
+                                        					fightsend("{0} is already trying to give you a victory, just shh ok?".format(stopper))
+					                                        f.write(line)
 									elif act[0].lower() == "no" and (stopper and stopper.lower() == getNick(data).lower()) and (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()):
 										fightsend("stop flip floppin like a politician")
 										stopper = ''
@@ -1474,8 +1877,8 @@ def main(joined):
 									elif act[0].lower() == "no" and (stopper and stopper != getNick(data)) and (initiator == getNick(data) or who == getNick(data).lower()):
 										fightsend("no you dont get a say in this.")
 										f.write(line)
-                                                                        else:
-                                                                        	f.write(line)
+                                    					else:
+					                                        f.write(line)
 								f.truncate()
 								f.close()		
 
@@ -1491,7 +1894,7 @@ def main(joined):
 							else:
 								fightsend("stats for {0}:".format(whostats))
 								fightsend("lvl: {0}, atk: {1}, grd: {2}, mag: {3}, mdef: {4}, hp: {5}, xp to next lvl: {6}, wins: {7}".format(checkStats[1],checkStats[2],checkStats[3],checkStats[4],checkStats[5],checkStats[6],checkStats[7],checkStats[8]))
-						
+
 						elif act[0].lower() == "history" and FIGHT_HISTORY:
 							name = getNick(data)
 							if VERBOSE: log("Getting fight history for {0}".format(name))
@@ -1516,9 +1919,9 @@ def main(joined):
 								fightsend("ok go here: {0}".format(url))
 								if VERBOSE: log("Fight history uploaded to: {0}".format(url))
 								continue
-							except:
+							except Exception as e:
 								fightsend("super. i think ive temporarily forgotten how to read. try again later.")
-								if VERBOSE: log("Couldn't get history.")
+								if VERBOSE: log("Couldn't get history: {0}".format(str(e)))
 								continue
 	
 						elif len(act[0]) == 1:
@@ -1526,10 +1929,10 @@ def main(joined):
 							canattack = 0
 							inafight = 0
 							with open('fightsongoing', 'r') as f:
-                                                                for line in f:
+                                				for line in f:
 									if name.lower() in line: inafight = 1
 									if name.lower() == line.split('[-]')[3].lower() and int(line.split('[-]')[2]) == 1:
-                                                                        	attacker = line.split('[-]')[3]
+					                                        attacker = line.split('[-]')[3]
 										if attacker == line.split('[-]')[1]:
 											defender = line.split('[-]')[0]
 										else:
@@ -1547,7 +1950,7 @@ def main(joined):
 									if inafight == 1: fightsend("it isnt your turn stop being impatient")
 									else: fightsend("you arent even fighting or anything.")
 								else: fightsend("youre not making any sesne. use %fight help if you need, you know, help")
-                                                                continue
+				                                continue
 							
 							p1 = getFighterStats(attacker)
 							p2 = getFighterStats(defender)
@@ -1564,37 +1967,37 @@ def main(joined):
 								with open('fightsongoing', 'r+') as f:
 									lines = f.readlines()
 									f.seek(0)
-		                                                       	for line in lines:
-                		                                               	initiator = line.split('[-]')[0]
-                                		                                who = line.split('[-]')[1]
-                                                              		        if attacker.lower() == initiator.lower() or attacker.lower() == who.lower():
+						                        for line in lines:
+				                		                initiator = line.split('[-]')[0]
+                                						who = line.split('[-]')[1]
+					                                        if attacker.lower() == initiator.lower() or attacker.lower() == who.lower():
 											continue
 										else:
 											f.write(line)
 									f.truncate()
 									f.close()
 							if int(p1[6]) <= 0:
-                                                                fighting = 0
-                                                                if FIGHT_VERBOSE: log("{0} wins!".format(p2[0]))
-                                                                xp = getXPGain(defender,attacker)
-                                                                setFighterStats(fname=defender,xp=int(p2[7]) - int(xp[0]),tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p2[1])),wins=(int(p2[8])+1))
-                                                                setFighterStats(fname=attacker,xp=int(p1[7]) - int(xp[1]),tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p1[1])))
-                                                                fightsend("{0} died!  better luck next time.".format(attacker))
-                                                                fightsend("{0} gains {1} xp from the battle".format(defender,int(xp[0])))
-                                                                fightsend("{0} gains {1} xp for pity".format(attacker,int(xp[1])))
+				                                fighting = 0
+				                                if FIGHT_VERBOSE: log("{0} wins!".format(p2[0]))
+				                                xp = getXPGain(defender,attacker)
+				                                setFighterStats(fname=defender,xp=int(p2[7]) - int(xp[0]),tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p2[1])),wins=(int(p2[8])+1))
+				                                setFighterStats(fname=attacker,xp=int(p1[7]) - int(xp[1]),tmpstat='',tmpbuff=0,hp=getMaxHPByLevel(int(p1[1])))
+				                                fightsend("{0} died!  better luck next time.".format(attacker))
+				                                fightsend("{0} gains {1} xp from the battle".format(defender,int(xp[0])))
+				                                fightsend("{0} gains {1} xp for pity".format(attacker,int(xp[1])))
 								writeHistory(attacker,defender,"{0} died! {0} got {2}xp, {1} got {3}xp![-]=============================================[-]".format(attacker,defender,xp[1],xp[0]))
-                                                                with open('fightsongoing', 'r+') as f:
-                                                                        lines = f.readlines()
-                                                                        f.seek(0)
-                                                                        for line in lines:
-                                                                                initiator = line.split('[-]')[0]
-                                                                                who = line.split('[-]')[1]
-                                                                                if attacker.lower() == initiator.lower() or attacker.lower() == who.lower():
-                                                                                        continue
-                                                                                else:
-                                                                                        f.write(line)
-                                                                        f.truncate()
-                                                                        f.close()
+				                                with open('fightsongoing', 'r+') as f:
+					                                lines = f.readlines()
+					                                f.seek(0)
+					                                for line in lines:
+					                                        initiator = line.split('[-]')[0]
+					                                        who = line.split('[-]')[1]
+					                                        if attacker.lower() == initiator.lower() or attacker.lower() == who.lower():
+						                                        continue
+					                                        else:
+						                                        f.write(line)
+					                                f.truncate()
+					                                f.close()
 							if fighting == 1:
 								p1 = getFighterStats(attacker)
 								p2 = getFighterStats(defender)
@@ -1623,8 +2026,8 @@ def main(joined):
 									privsend(i,defender)
 								privsend("here are your new stats:",defender)
 								privsend("level: {0}, attack: {1}, guard: {2}".format(newstats[1],newstats[2],newstats[3]),defender)
-                                                                privsend("magic attack: {0}, magic guard: {1}, total hp: {2}".format(newstats[4],newstats[5],newstats[6]),defender)
-                                                                privsend("xp to next level: {0}, total wins: {1}".format(newstats[7],newstats[8]),defender)
+				                                privsend("magic attack: {0}, magic guard: {1}, total hp: {2}".format(newstats[4],newstats[5],newstats[6]),defender)
+				                                privsend("xp to next level: {0}, total wins: {1}".format(newstats[7],newstats[8]),defender)
 								zero = 0
 								setFighterStats(fname=defender,atksincelvl=zero,satksincelvl=zero,fatksincelvl=zero,magatksincelvl=zero,grdsincelvl=zero,mgrdsincelvl=zero)
 							if fighting == 1:
@@ -1633,46 +2036,111 @@ def main(joined):
 							fightsend("maybe you need to look at %fight help.  or learn how to read.  one of the two.")
 						
 				else:
-					lastMessage = getMessage(data).strip('\r\n')
+					try:
+						lastMessage = getMessage(data)
+						lastMessage = lastMessage.translate(None, "\t\r\n")
+					except:
+						lastMessage = "hi"
 					lastPerson = getNick(data)
 					lastTime = time.time()
-					if data.lower().find(botname.lower() + ':') != -1 and getChannel(data) == defchannel: # Did someone say "botname: "?
+					if data.lower().find(botname.lower() + ':') != -1: # Did someone say "botname: "?
 						msg = getMessage(data)
 						msg = msg.lower().split(botname.lower())[1:]
 						msg = " ".join(msg)
-						msg = msg.strip(' \t\r\n')
+						msg = msg.translate(None, "\t\r\n")
 						msg = msg.replace(':', '', 1)
 						if VERBOSE: log("{0} >> {1}: {2}".format(getNick(data),botname,msg))
 						msg = msg.lower()
 						if VERBOSE: log("Attempting to reply with cleverbot...")
 						try:
 							msg = convo.think(msg); # Trigger a cleverbot response
-						except:
-							if VERBOSE: log("Hmm.. something is wrong on cleverbot's side..")
+						except Exception as e:
+							if VERBOSE: log("Cleverbot f'd up: {0}".format(str(e)))
 							continue
-						msg = msg.lower()
-						msg = "".join(c for c in msg if c not in ('\'','"','!',':',';'))
-						send("{0}".format(msg))
+						msg = msg.translate(None, "'\"!:;").lower()
+						send("{0}".format(msg),getChannel(data))
 						if VERBOSE: log("{0}: {1}".format(botname, msg))
 						# END FIGHT
 
 			# Below is the YouTube info method.
-			if YOUTUBE_LINKS and getChannel(data) == defchannel:
+			if YOUTUBE_LINKS:
 				try:
 					youtube = re.findall(r'(https?://)?(www\.)?((youtube\.(com))/watch\?v=([-\w]+)|youtu\.be/([-\w]+))', getMessage(data))
 				except:
 					continue
 				if youtube:
 					vidid = [c for c in youtube[0] if c]
-					print vidid
 					vidid = vidid[len(vidid)-1]
-					print vidid
 					try:
 						vidinfo = getVideo(vidid)
-					except:
-						send("fake video alert fake video alert fake video alert.")
+					except Exception as e:
+						send("fake video alert fake video alert fake video alert.",getChannel(data))
+						if VERBOSE: log("Couldn't get video information: {0}".format(str(e)))
 						continue
-					send("that video is titled \"{0}\" and it is {1} in length. just fyi".format(vidinfo[0],vidinfo[1]))
+					send("that video is titled \"{0}\" and it is {1} in length. just fyi".format(vidinfo[0],vidinfo[1]),getChannel(data))
+
+			# Let's try to auto summarize some stuff
+			if NEWS_LINKS:
+				try:
+					newsSummary
+				except NameError:
+					pass
+				else:
+					newsSummary = None
+				findurl=re.compile("""((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))""")
+				for url in re.findall(findurl, data):
+					newsurl = url[0]
+					if not newsurl.startswith('http'):
+						newsurl = 'http://'+newsurl
+				        try:
+				                newsSummary,newsTitle = whoHasTimeToRead(newsurl)
+					except Exception as e:
+						if str(e).lower() == "too many values to unpack":
+							err = whoHasTimeToRead(newsurl)
+							if err == "~~HTTPS~~":
+								send("i am gonna summarize this article but they want me to use cookies so this might take a while plz b patient. pls.",getChannel(data))
+								try:
+									newsSummary,newsTitle = readingIsFun(newsurl)
+								except Exception as e:
+									send("welp that site wouldnt let me read the news because it hates bots, so",getChannel(data))
+									if VERBOSE: log("Error getting news summary: {}".format(str(e)))
+									continue
+						try:
+							newsSummary
+						except NameError:
+							pass # Ignore name errors for now.
+						except Exception as e:
+							if VERBOSE: log("Summary error: {0}".format(str(e)))
+							sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+		                                        continue
+						else:
+							pass
+					try:
+						if newsSummary is not None:
+							if len(newsSummary) < SUMMARY_COUNT: continue
+							if VERBOSE: 
+								log("Found a news article!")
+								log("Title: {0}".format(newsTitle.encode('utf-8','ignore')))
+								log("Summary: {0}".format(" ".join(newsSummary).translate(None, "\t\r\n")))
+								try:
+									send("title: \"{0}\". here are the good bits:".format(newsTitle.lower().encode('utf-8','replace')),getChannel(data))
+								except Exception as e:
+									if VERBOSE: log("Error in displaying article title: {}".format(str(e)))
+									send("something about the title of this article is anti-bot. send this site an email and tell them to use utf-8 encoding.",getChannel(data))
+							for thing in newsSummary:
+								try:
+									thing = thing.translate(None, "\t\r\n").encode('utf-8','replace')
+									send("{0}".format(thing.lower()),getChannel(data))
+								except:
+									try:
+										thing = thing.translate(None, "\t\r\n")
+										send("{0}".format(thing.lower()),getChannel(data))
+									except Exception as e:	
+										if VERBOSE: log("Error in displaying article summary: {}".format(str(e)))
+										break
+					except Exception as e:
+						# Something went wrong.  Log it.
+						if VERBOSE: log("WARNING: {}".format(str(e)))
 
 			#-- 
 			# Below is the Gimli subroutine.
@@ -1681,22 +2149,21 @@ def main(joined):
 			#
 			# Fun fact: This is the only thing the bot returns in its own voice that contains a capital letter.
 			# This is by design.
-			#--
-			if getChannel(data) == defchannel:
-				gimli = getMessage(data)
-				try: 
-					gimli = gimli.split(' ')[0:]
-				except AttributeError:
-					gimli = "Nope"
-				if gimli[0].lower() == 'and' and gimli[1].lower() == 'my':
-					andcount+=1
-					if VERBOSE: log("Gimli = {0}".format(andcount))
-					if andcount == 2:
-						send("AND MY AXE!")
-						andcount=0
-						if VERBOSE: log("Gimli subroutine triggered!")
-				else:
+			#--:
+			gimli = getMessage(data)
+			try: 
+				gimli = gimli.split(' ')[0:]
+			except AttributeError:
+				gimli = "Nope"
+			if gimli[0].lower() == 'and' and gimli[1].lower() == 'my':
+				andcount+=1
+				if VERBOSE: log("Gimli = {0}".format(andcount))
+				if andcount == 2:
+					send("AND MY AXE!",getChannel(data))
 					andcount=0
+					if VERBOSE: log("Gimli subroutine triggered!")
+			else:
+				andcount=0
 			#-- END GIMLI
 	
 			#--
@@ -1712,7 +2179,7 @@ def main(joined):
 			for line in lines:
 				if memnick == line.split('[-]')[1]: # If the nickname we got earlier is the second name in the line, they have a memo
 					if getChannel(data) == defchannel:
-						send("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]))
+						send("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]),getChannel(data))
 					else:
 						fightsend("hey {0}, {1} said >> tell {2} {3}".format(line.split('[-]')[1],line.split('[-]')[0],line.split('[-]')[1],line.split('[-]')[2]))
 					if VERBOSE: log("Told {0} {1}".format(line.split('[-]')[1],line.split('[-]')[2]))
@@ -1723,6 +2190,22 @@ def main(joined):
 			f.truncate()
 			f.close()
 			#-- END MEMO
+
+			# And now let's see if someone wants a ping when someone else is alive in chat.
+			
+			f = open('pings','r+')
+			lines = f.readlines()
+			f.seek(0)
+			for line in lines:
+				if line.split('[-]')[1].find(memnick) != -1:
+					sendPing('Gr3yBot',line.split('[-]')[0],"{0} is chatting it up in {1}".format(memnick,defchannel))
+					send("hey {0}, {1} told me to let them know when you start chatting. and i did.  so you have like 20 seconids to go idle again".format(memnick,line.split('[-]')[0]),getChannel(data))
+					if VERBOSE: log("Triggering a ping: {0} wanted to know if {1} joined or unidled.".format(line.split('[-]')[0],memnick))
+					continue
+				else:
+					f.write(line)
+			f.truncate()
+			f.close()
 		
 		#--
 		# This is the random chatter algorithm.
@@ -1736,58 +2219,57 @@ def main(joined):
 		# It's all random.
 		#--
 		if (random.randint(1000, 99991231) + xOrShift()) % 300 < 1:
-			saysomething = random.randint(1,101)
+			saysomething = random.randint(1,121)
 			if saysomething < 15:
 				afile = open('overlord.txt', 'rb')
 				thisline = rline(afile)
 				thisline = "".join(c for c in thisline if c not in ('\'','"','!','?',':',';'))
-				send("when i am an evil overlord, {0}".format(thisline))
+				send("when i am an evil overlord, {0}".format(thisline),getChannel(data))
 				if VERBOSE: log("Random Chatter: when i am an evil overlord, {0}".format(thisline))
 			if 15 < saysomething < 30:
 				afile = open('marvin.txt', 'rb')
 				thisline = rline(afile)
 				thisline = "".join(c for c in thisline if c not in ('\'','"','!','?',':',';'))
-				send("{0}".format(thisline))
+				send("{0}".format(thisline),getChannel(data))
 				if VERBOSE: log("Random Chatter: {0}".format(thisline))
 			if 30 < saysomething <= 45 and TWITTER_ENABLED:
 				followAll()
 				try:
-		                        fol = getRandomFollower()
-	                        except tweepy.error.TweepError as e:
-	                                print "error"
-	                                if e.message[0]['code'] == 88:
-	                                	print "rate limit: {0}".format(getRateLimit())
-	                                        send("you guys are all farts")
-	                                        continue
-	                        try:
-					send("lets see what one of my followers, {0}, is doing on twitter...".format(fol))
-				except UnboundLocalError:
-					log("Something is wrong with twitter.")
+		            		fol = getRandomFollower()
+			        except (Exception, tweepy.error.TweepError) as e:
+	                		if VERBOSE: log("Error with tweepy: {0}".format(str(e)))
+					sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+			                if e.message[0]['code'] == 88:
+	        			        print "rate limit: {0}".format(getRateLimit())
+				                send("you guys are all farts",getChannel(data))
+			                continue
+			        try:
+					send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),getChannel(data))
+				except Exception as e:
+					if VERBOSE: log("Can't retrieve twitter followers: {0}".format(str(e)))
 					continue
 	                        time.sleep(1)
 	                        mag = getTweet(fol)
 				if mag == "-*404":
-                                	send("not sure how this happened, but that person doesnt exist anymore.  this is an error that no one should ever see.  please send msg to bgm and let him know i broke")
-                                        if VERBOSE: log("Doesn't Exist")
-                                        continue
-                                if mag == "-*501":
-                                	send("nevermind.  @{0} is a buttface and wont accept my follow request".format(tweetnick))
-                                        if VERBOSE: log("Not Authorized")
-                                        continue
-	                        for tweet in mag:
-	                        	try:
-	                                	mag = tweet.retweeted_status.text
-	                                        getrt = tweet.text.encode('utf-8','ignore')
-	                                        getrt = getrt.split('@')[1].split(':')[0]
-	                                        mag = "RT @{0}: {1}".format(getrt,mag)
-	                                except AttributeError:
-	                                        mag = tweet.text.encode('utf-8', 'ignore')
-	                                        mag = "".join(c for c in mag if c not in ('\t'))
-	                                mag = mag.replace('\r', ' ')
-	                                mag = mag.replace('\n', ' ')
-	                                send("@{0} >> {1}".format(fol,mag))
+					send("not sure how this happened, but that person doesnt exist anymore.  this is an error that no one should ever see.  please send msg to bgm and let him know i broke",getChannel(data))
+			                if VERBOSE: log("Doesn't Exist")
+			                continue
+				if mag == "-*501":
+			                send("nevermind.  @{0} is a buttface and wont accept my follow request".format(tweetnick),getChannel(data))
+			                if VERBOSE: log("Not Authorized")
+			                continue
+				for tweet in mag:
+	                		try:
+				                mag = tweet.retweeted_status.text
+				                getrt = tweet.text.split('@')[1].split(':')[0]
+				                mag = "RT @{0}: {1}".format(getrt,mag)
+			                except (Exception, AttributeError) as e:
+						if VERBOSE: log("Non-fatal issue with tweet: {0}".format(str(e)))
+						sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+	        			        mag = tweet.text
+			                send("@{0} >> {1}".format(fol,mag),getChannel(data))
 					if VERBOSE: log("Random Chatter: @{0} >> {1}".format(fol, mag))
-	                                send("follow {} to get your tweets in here".format(twittername))
+	        		        send("follow {} to get your tweets in here".format(twittername),getChannel(data))
 			if 45 < saysomething <= 100:
 				# Let's make sure the variables are initialized.
 				try:
@@ -1809,16 +2291,18 @@ def main(joined):
 				if VERBOSE: log("Attempting to make an idle cleverbot response...")
 				try:
 					msg = convo.think(lastMessage)
-				except:
-					if VERBOSE: log("Hmm.. something went wrong.  Probably on cleverbot's side.")
+				except Exception as e:
+					if VERBOSE: log("Cleverbot error: {0}".format(str(e)))
 					continue
-                                msg = msg.lower()
-				msg = "".join(c for c in msg if c not in ('\'','"','!',':',';'))
 				if VERBOSE: 
 					log("Random Chatter: Last message from {0} was {1}.".format(lastPerson,lastMessage))
 					log("Random Chatter: Replying to {0} with: {1}".format(lastPerson,msg))
-				send("{}".format(msg))
-                        if 100 < saysomething:
+				send("{}".format(msg),getChannel(data))
+			if 100 < saysomething <= 119:
+				msg = weirdBotOutput()
+				send("{}".format(msg),getChannel(data))	
+				if VERBOSE: log("Random Chatter: Confession - {0}".format(msg))
+                        if 120 < saysomething:
 				#--
 				# Have a really, really small chance of singing the DK rap because why not.
 				#
@@ -1836,19 +2320,19 @@ def main(joined):
 				#--
 				if (((random.randint(1, 99991231) % 300) * (246*random.randint(3,37))) % 1999) == 64:
 					if VERBOSE: log("It sang the DK rap!")
-					send("here here here here here we go")
+					send("here here here here here we go",getChannel(data))
 					time.sleep(.5)
-					send("well theyre finally here, performing for you")
+					send("well theyre finally here, performing for you",getChannel(data))
 					time.sleep(.5)
-					send("and if you know the words you can join in too")
+					send("and if you know the words you can join in too",getChannel(data))
 					time.sleep(.5)
-					send("put your hands together if you want to clap")
+					send("put your hands together if you want to clap",getChannel(data))
 					time.sleep(.5)
-					send("as we take you through this monkey rap")
+					send("as we take you through this monkey rap",getChannel(data))
 					time.sleep(.5)
-					send("d-k.  donkey kong.")
+					send("d-k.  donkey kong.",getChannel(data))
 					time.sleep(.5)
-					send("d-k.  DONKEYKONGISHERE.")
+					send("d-k.  DONKEYKONGISHERE.",getChannel(data))
 	
 #-- Make sure this is the main script
 if __name__ == '__main__':

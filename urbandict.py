@@ -11,7 +11,6 @@ def getWord(word):
 	word = word.replace('%', '%25')
 	word = word.split(' ')
 	word = "%20".join(word)
-	print 'http://www.urbandictionary.com/define.php?term={0}'.format(word)
 	url = 'http://www.urbandictionary.com/define.php?term={0}'.format(word)
 	r = requests.get(url)
 	soup = BeautifulSoup(r.content)

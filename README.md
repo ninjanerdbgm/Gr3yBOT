@@ -25,6 +25,11 @@ https://greynoi.se
               - Channel op commands, if user's in the admin file:
                       - Op a user
                       - Change the topic
+	      NEW with 1.9:
+		      - Automatic News Article summarization
+		      - Automatic Youtube video information
+		      - Slack integration for cell phone pinging
+	      
               And of course,
               - Displays latest GR3YNOISE podcast info
               - Displays the upcoming events at SynShop Las Vegas
@@ -42,6 +47,15 @@ https://greynoi.se
                   - CookieJar
             For Weather:
             	  - feedparser
+
+      NEW IN 1.9:
+		- Article Summarization
+		
+			For article summarization, more dependencies have been added.  You'll need to install Goose for python as well as
+			NLTK.  After installing NLTK, you'll need to get the following dependencies:
+				- stopwords
+				- punkt
+				- maxent_treebank_pos_tagger
 
       --== IMPORTANT!! ==--
             Make sure you open gr3ybot_settings.py and configure the bot before attempting to run it.

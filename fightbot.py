@@ -9,7 +9,7 @@
 # function. If you end up using these, please give me credit
 # somewhere in your comments.  
 
-from gr3ybot_settings import FIGHT_VERBOSE, LOGFILE, LOCALTZ
+from gr3ybot_settings import FIGHT_VERBOSE, FIGHTLOG, LOGFILE, LOCALTZ
 import random
 import sys
 from pytz import timezone
@@ -29,11 +29,16 @@ if __name__ == "__main__":
 
 #-- Logging...
 timeformat = "%m/%d/%y %H:%M:%S"
-def log(text):
-	localnow = datetime.datetime.now(timezone(LOCALTZ))
-        with open(LOGFILE, 'a+') as f:
-                f.write("{0} --==-- {1}\r\n".format(strftime(timeformat),text))
-        f.close()
+def log(p1=None,p2=None,text=None):
+	if text is not None:
+		if FIGHTLOG is not None: LOGFILE = FIGHTLOG
+		localnow = datetime.datetime.now(timezone(LOCALTZ))
+	        with open(LOGFILE, 'a+') as f:
+	                f.write("{0} --==-- {1}\r\n".format(strftime(timeformat),text))
+	        f.close()
+		if p1 is not None and p2 is not None:
+			writeHistory(p1,p2,text)
+#--
 
 def writeHistory(p1,p2,text):
 	if p1 is None and p2 is None: return False
@@ -60,6 +65,7 @@ def writeHistory(p1,p2,text):
 		f.close()
 
 def getHistory(name):
+	if not FIGHT_VERBOSE: return False
 	with open('fights.log', 'r') as f:
 		lines = f.readlines()
 		f.seek(0)
@@ -240,14 +246,17 @@ def getMaxHPByLevel(lvl):
 	maxhp = (lvl + 15) + ((lvl * 2) * 2)
 	return maxhp
 
-def critChance():
+def critChance(p1,p2):
 	seed = int(time.time() * os.getpgid(0))  # Get a random number based on the current time, then multiply it by the current process ID.
 	critchance = ((seed * (xOrShift())) * 246) % 100 # Multiply it by some large numbers, mod it by 100.  This returns a number between 0 and 99
-	if FIGHT_VERBOSE: log("CRIT CHANCE CALCULATION:\n------------------\nSeed = unix time * the python process id = {0}".format(seed))
-	if FIGHT_VERBOSE: log("Crit Chance = seed * (an xOrShift * 246) % 100 = {0} * (xOrShift * 246) % 100 = {1}".format(seed,critchance))
-	if FIGHT_VERBOSE: log("If Crit Chance < 3 (3% of the time), it crits.")
+	if FIGHT_VERBOSE: 
+		log(p1,p2,"CRIT CHANCE CALCULATION:\n------------------\nSeed = unix time * the python process id = {0}".format(seed))
+		log(p1,p2,"Crit Chance = seed * (an xOrShift * 246) % 100 = {0} * (xOrShift * 246) % 100 = {1}".format(seed,critchance))
+		log(p1,p2,"If Crit Chance < 3 (3% of the time), it crits.")
 	if critchance < 3: # 3% chance of returning a crit, essentially based on when the user attacked.
+		if FIGHT_VERBOSE: log(p1,p2,"Crit!!")
 		return 1
+	if FIGHT_VERBOSE: log(p1,p2,"No crit")
 	return 0
 
 def getXPGain(winner,loser):
@@ -278,9 +287,9 @@ def getXPGain(winner,loser):
 	p2xp = inverteddiff + (xOrShift() % 2) + int(round((turncount / 8)))
 	if p2xp < 1: p2xp = 1
 	if FIGHT_VERBOSE: 
-		log("{0} XP Gain: ((({1} * 2) + difference fraction) + {2}'s level + number of turns / 4 + XOR Shift % 5) / level difference".format(p1[0],lesserlvl,p2[0]))
-		log("===========> (({0} + {1})) + {2} + {3} / 4 + XOR Shift % 5) / {4} = {5} XP".format(lesserlvl * 2,diff,p2lvl,turncount,diff,p1xp))
-		log("{0} XP Gain: level difference + (XOR Shift % 2) + number of turns / 8 = {2} + XOR Shift % 2 + {3} / 8 = {1} XP".format(p2[0],p2xp,inverteddiff,turncount))
+		log(winner,loser,"{0} XP Gain: ((({1} * 2) + difference fraction) + {2}'s level + number of turns / 4 + XOR Shift % 5) / level difference".format(p1[0],lesserlvl,p2[0]))
+		log(winner,loser,"===========> (({0} + {1})) + {2} + {3} / 4 + XOR Shift % 5) / {4} = {5} XP".format(lesserlvl * 2,diff,p2lvl,turncount,diff,p1xp))
+		log(winner,loser,"{0} XP Gain: level difference + (XOR Shift % 2) + number of turns / 8 = {2} + XOR Shift % 2 + {3} / 8 = {1} XP".format(p2[0],p2xp,inverteddiff,turncount))
 	gains = [p1xp, p2xp]
 	return gains
 
@@ -321,31 +330,31 @@ def getFighterStats(name):
 	else:
 		return False
 
-def doesItMiss(choice,p1lev,p2lev):
+def doesItMiss(choice,p1lev,p2lev,p1,p2):
 	diff = int(round(((p1lev - p2lev) / 4) - 0.5)) # For every 4 levels the attacker is above the defender, they get a bonus to their to-hit.
 	if diff < 0: diff = 0
-	if FIGHT_VERBOSE: log("Checking if attack misses...")
+	if FIGHT_VERBOSE: log(p1,p2,"Checking if attack misses...")
 	seed = int(round(time.time()))
 	if choice == 1:
 		base = 5 - diff
-		if FIGHT_VERBOSE: log("BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log(p1,p2,"BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
-		if FIGHT_VERBOSE: log("BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log(p1,p2,"BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
-		if FIGHT_VERBOSE: log("BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log(p1,p2,"BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
-		if FIGHT_VERBOSE: log("BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
+		if FIGHT_VERBOSE: log(p1,p2,"BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100
-	if FIGHT_VERBOSE: log("MISS CHANCE = ({0} * 246) ^ (abs(({1} - {2})) + {3}) % 100 = {4}".format(seed,p2lev,p1lev,seedtwo,tomiss))
+	if FIGHT_VERBOSE: log(p1,p2,"MISS CHANCE = ({0} * 246) ^ (abs(({1} - {2})) + {3}) % 100 = {4}".format(seed,p2lev,p1lev,seedtwo,tomiss))
 	if tomiss < base: 
-		if FIGHT_VERBOSE: log("{0} < {1} --> MISS!".format(tomiss,base))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} < {1} --> MISS!".format(tomiss,base))
 		return 1
 	else: 
-		if FIGHT_VERBOSE: log("{0} > {1} --> HIT!".format(tomiss,base))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} > {1} --> HIT!".format(tomiss,base))
 		return 0
 	
 
@@ -392,7 +401,7 @@ def setFighterStats(fname=None,lvl=None,atk=None,grd=None,mag=None,mdef=None,hp=
 			for line in lines:
 				x = line.split('[-]')
 				if x[0] == specs[0]:
-					f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}[-]{7}[-]{8}[-]{9}[-]{10}[-]{11}[-]{12}[-]{13}[-]{14}[-]{15}[-]{16}[-]{17}\r\n".format(specs[0],specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],str(specs[16]),str(specs[17].strip('\r\n'))))
+					f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}[-]{7}[-]{8}[-]{9}[-]{10}[-]{11}[-]{12}[-]{13}[-]{14}[-]{15}[-]{16}[-]{17}\r\n".format(specs[0],specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],str(specs[16]),str(specs[17]).strip('\r\n')))
 				else:
 					f.write(line)
 			f.truncate()
@@ -481,7 +490,7 @@ def xOrShift():
 	return XD
 # End xOrShift
 
-def rollDice(rolls,sides):
+def rollDice(rolls,sides,p1,p2):
 	rolltotal = 0
 	rollstr = []
 	for i in range(0,rolls):
@@ -492,7 +501,7 @@ def rollDice(rolls,sides):
 	if FIGHT_VERBOSE: log("Dice Roll: {0}d{1} ---> {3} = {2}".format(rolls,sides,rolltotal,rollstr))
 	return rolltotal
 
-def calcDamage(choice,atkstat,defstat,p1lvl,p2lvl):
+def calcDamage(choice,atkstat,defstat,p1lvl,p2lvl,p1,p2):
 	diff = p1lvl - p2lvl
 	defdiff = 0
 	if diff < 0: 
@@ -501,31 +510,31 @@ def calcDamage(choice,atkstat,defstat,p1lvl,p2lvl):
 	lvlbonus = int(round((p1lvl / 4) - 0.5))
 	if lvlbonus < 0: lvlbonus = 0
 	if choice == 1: 
-		atkroll = rollDice(2+lvlbonus,6)
-		defroll = rollDice(2+defdiff,3)
+		atkroll = rollDice(2+lvlbonus,6,p1,p2)
+		defroll = rollDice(2+defdiff,3,p1,p2)
 	if choice == 2:
-		atkroll = rollDice(5+lvlbonus,4)
-		defroll = rollDice(2+defdiff,3)
+		atkroll = rollDice(5+lvlbonus,4,p1,p2)
+		defroll = rollDice(2+defdiff,3,p1,p2)
 	if choice == 3:
-		atkroll = rollDice(2+lvlbonus,4)
-		defroll = rollDice(2+defdiff,3)
+		atkroll = rollDice(2+lvlbonus,4,p1,p2)
+		defroll = rollDice(2+defdiff,3,p1,p2)
 	if choice == 4:
-		atkroll = rollDice(2+lvlbonus,10)
-		defroll = rollDice(2+defdiff,3)
+		atkroll = rollDice(2+lvlbonus,10,p1,p2)
+		defroll = rollDice(2+defdiff,3,p1,p2)
 	atk = atkstat + atkroll + ((int(round(time.time())) * os.getpgid(0) + xOrShift()) % 3) + diff
 	if FIGHT_VERBOSE: 
-		log("Attack formula: attack + dice roll + (((round(unix time)) * python process ID + xOrShift) % 3) + level difference")
-		log("==============> {0} + {1} + ((unix time * {2} + xorshift) % 3) + {3} = {4}".format(atkstat,atkroll,os.getpgid(0),diff,atk))
+		log(p1,p2,"Attack formula: attack + dice roll + (((round(unix time)) * python process ID + xOrShift) % 3) + level difference")
+		log(p1,p2,"==============> {0} + {1} + ((unix time * {2} + xorshift) % 3) + {3} = {4}".format(atkstat,atkroll,os.getpgid(0),diff,atk))
 	grd = defstat + defroll + ((int(round(time.time())) * os.getpgid(0) + xOrShift()) % 3)
 	if FIGHT_VERBOSE: 
-		log("Defense formula: guard + dice roll + (((round(unix time)) * python process ID + xOrShift) % 3)")
-		log("===============> {0} + {1} + ((unix time * {2} + xorshift) % 3) = {3}".format(defstat,defroll,os.getpgid(0),grd))
+		log(p1,p2,"Defense formula: guard + dice roll + (((round(unix time)) * python process ID + xOrShift) % 3)")
+		log(p1,p2,"===============> {0} + {1} + ((unix time * {2} + xorshift) % 3) = {3}".format(defstat,defroll,os.getpgid(0),grd))
 	dmg = atk - grd
 	if FIGHT_VERBOSE: 
-		log("Attack - Defense = {0}".format(dmg))
+		log(p1,p2,"Attack - Defense = {0}".format(dmg))
 		if dmg > 0:
-			log("== HIT! ==") 
-		else: log("== Damage too low! MISS! ==")
+			log(p1,p2,"== HIT! ==") 
+		else: log(p1,p2,"== Damage too low! MISS! ==")
 	return dmg
 
 def resolveAttack(choice,p1,p2,mod=None):
@@ -539,7 +548,7 @@ def resolveAttack(choice,p1,p2,mod=None):
 		if mod is None: 
 			atkcount = int(attacker[11])
 			setFighterStats(fname=attacker[0],atksincelvl=(atkcount + 1))
-			writeHistory(p1,p2,"{0} attacked {1}!".format(p1,p2))
+			if FIGHT_VERBOSE: log(p1,p2,"{0} attacked {1}!".format(p1,p2))
 		if mod == 2: 
 			atkcount = int(attacker[12])
 			setFighterStats(fname=attacker[0],satksincelvl=(atkcount + 1))
@@ -547,11 +556,11 @@ def resolveAttack(choice,p1,p2,mod=None):
 			atkcount = int(attacker[13])
 			setFighterStats(fname=attacker[0],fatksincelvl=(atkcount + 1))
 		#--
-		if FIGHT_VERBOSE: log("Resolving attack - {0} (lvl {1}) attacks {2} (lvl {3}):\n-----------------".format(attacker[0],attacker[1],defender[0],defender[1]))
+		if FIGHT_VERBOSE: log(p1,p2,"Resolving attack - {0} (lvl {1}) attacks {2} (lvl {3}):\n-----------------".format(attacker[0],attacker[1],defender[0],defender[1]))
 		totalatk = int(attacker[2])
 		totaldef = int(defender[3])
 		if mod is None: mod = choice
-		misschance = doesItMiss(mod,int(attacker[1]),int(defender[1]))
+		misschance = doesItMiss(mod,int(attacker[1]),int(defender[1]),attacker[0],defender[0])
 		if misschance == 1:
 			results = [attacker, defender]
 			dmg = 0
@@ -559,16 +568,15 @@ def resolveAttack(choice,p1,p2,mod=None):
 			parrynumber = 2
 			if defender[9] == 'grd': parrynumber = 5
 			if parryChance < parrynumber:
-				if FIGHT_VERBOSE: log("Parry!")
-				dmg = calcDamage(1,int(defender[4]),int(attacker[5]),int(defender[1]),int(attacker[1])) - random.randint(0,4)
+				if FIGHT_VERBOSE: log(p1,p2,"Parry!")
+				dmg = calcDamage(1,int(defender[4]),int(attacker[5]),int(defender[1]),int(attacker[1]),attacker[0],defender[0]) - random.randint(0,4)
 		                if dmg < 0: dmg = 2
-		                if FIGHT_VERBOSE: log("{0} parries and does {1} damage to {2}!".format(defender[0],dmg,attacker[0]))
-				writeHistory(attacker[0],defender[0],"{0} parried and did {1} damage to {2}!".format(defender[0],dmg,attacker[0]))
+		                if FIGHT_VERBOSE: log(p1,p2,"{0} parries and does {1} damage to {2}!".format(defender[0],dmg,attacker[0]))
 				atkcount = int(defender[11])
 	                        setFighterStats(fname=defender[0],atksincelvl=(atkcount + 1))
 		                results.append("{0} parries the attack!  {1} damage to {2}".format(defender[0],dmg,attacker[0]))
 		                resulthp = int(attacker[6]) - dmg
-				writeHistory(attacker[0],defender[0],"HP Remaining --==-- {0}: {1}, {2}: {3}".format(attacker[0],resulthp,defender[0],defender[6]))
+				if FIGHT_VERBOSE: log(p1,p2,"HP Remaining --==-- {0}: {1}, {2}: {3}".format(attacker[0],resulthp,defender[0],defender[6]))
 		                setFighterStats(fname=attacker[0],hp=resulthp)
 				#-- Reset the temp stats
 		                #
@@ -578,7 +586,7 @@ def resolveAttack(choice,p1,p2,mod=None):
 		                #
 				return results
 			results.append("{0} swiftly dodges {1}'s attack!".format(defender[0],attacker[0]))
-			writeHistory(attacker[0],defender[0],"Miss!")
+			if FIGHT_VERBOSE: log(attacker[0],defender[0],"Miss!")
 			return results
 		if attacker[9] == 'atk': totalatk = totalatk + int(attacker[10])
 		if defender[9] == 'grd': totaldef = totaldef + int(defender[10])
@@ -589,15 +597,13 @@ def resolveAttack(choice,p1,p2,mod=None):
 		setFighterStats(fname=defender[0],tmpstat=reset,tmpbuff=0)
 		#
 		results = [attacker, defender]
-		dmg = calcDamage(mod,totalatk,totaldef,int(attacker[1]),int(defender[1]))
+		dmg = calcDamage(mod,totalatk,totaldef,int(attacker[1]),int(defender[1]),attacker[0],defender[0])
 	elif choice == 2: # Strong Attack
-		if FIGHT_VERBOSE: log("{0} elected to try a strong attack!".format(p1))
-		writeHistory(p1,p2,text="{0} tried a strong attack!".format(p1))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} elected to try a strong attack!".format(p1))
 		results = resolveAttack(1,p1,p2,mod=2)
 		return results
 	elif choice == 3: # Flurry Attack
-		if FIGHT_VERBOSE: log("{0} elected to try a flurry attack!".format(p1))
-		writeHistory(p1,p2,text="{0} tried a flurry attack!".format(p1))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} elected to try a flurry attack!".format(p1))
                 results = resolveAttack(1,p1,p2,mod=3)
 		return results
 	elif choice == 4: # Magic Attack
@@ -608,11 +614,10 @@ def resolveAttack(choice,p1,p2,mod=None):
                 atkcount = int(attacker[14])
                 setFighterStats(fname=attacker[0],magatksincelvl=(atkcount + 1))
                 #--
-                if FIGHT_VERBOSE: log("Resolving attack - {0} (lvl {1}) casts magic at {2} (lvl {3}):\n-----------------".format(attacker[0],attacker[1],defender[0],defender[1]))
-		writeHistory(attacker[0],defender[0],"{0} (lvl {1}) cast magic at {2} (lvl {3}):\n-----------------".format(attacker[0],attacker[1],defender[0],defender[1]))
+                if FIGHT_VERBOSE: log(p1,p2,"Resolving attack - {0} (lvl {1}) casts magic at {2} (lvl {3}):\n-----------------".format(attacker[0],attacker[1],defender[0],defender[1]))
                 totalatk = int(attacker[4])
                 totaldef = int(defender[5])
-                misschance = doesItMiss(choice,int(attacker[1]),int(defender[1]))
+                misschance = doesItMiss(choice,int(attacker[1]),int(defender[1]),attacker[0],defender[0])
                 if misschance == 1:
                         results = [attacker, defender]
                         dmg = 0
@@ -620,15 +625,13 @@ def resolveAttack(choice,p1,p2,mod=None):
 			parrynumber = 2
                         if defender[9] == 'mgrd': parrynumber = 5
                         if parryChance < parrynumber:
-                                dmg = calcDamage(1,int(defender[4]),int(attacker[5]),int(defender[1]),int(attacker[1])) - random.randint(0,4)
+                                dmg = calcDamage(1,int(defender[4]),int(attacker[5]),int(defender[1]),int(attacker[1]),attacker[0],defender[0]) - random.randint(0,4)
                                 if dmg < 0: dmg = 2
-                                if FIGHT_VERBOSE: log("{0} dodges and counters the spell for {1} damage!".format(defender[0],dmg))
-				writeHistory(attacker[0],defender[0],"{0} dodges and counters the spell for {1} damage!".format(defender[0],dmg))
+                                if FIGHT_VERBOSE: log(p1,p2,"{0} dodges and counters the spell for {1} damage!".format(defender[0],dmg))
 				atkcount = int(defender[11])
                                 setFighterStats(fname=defender[0],atksincelvl=(atkcount + 1))
                                 results.append("{0} dodges the spell and sees and opening to counter!  {1} damage to {2}".format(defender[0],dmg,attacker[0]))
                                 resulthp = int(attacker[6]) - dmg
-				writeHistory(attacker[0],defender[0],"HP Remaining --==-- {0}: {1}, {2}: {3}".format(attacker[0],resulthp,defender[0],defender[6]))
                                 setFighterStats(fname=attacker[0],hp=resulthp)
 				#-- Reset the temp stats
                                 #
@@ -638,7 +641,7 @@ def resolveAttack(choice,p1,p2,mod=None):
                                 #
                                 return results
 			results.append("{0} dodges {1}'s spell!".format(defender[0],attacker[0]))
-			writeHistory(attacker[0],defender[0],"Miss!")
+			if FIGHT_VERBOSE: log(attacker[0],defender[0],"Miss!")
                         return results
                 if attacker[9] == 'mag': totalatk = totalatk + int(attacker[10])
                 if defender[9] == 'mdef': totaldef = totaldef + int(defender[10])
@@ -649,10 +652,9 @@ def resolveAttack(choice,p1,p2,mod=None):
                 setFighterStats(fname=defender[0],tmpstat=reset,tmpbuff=0)
                 #
                 results = [attacker, defender]
-                dmg = calcDamage(choice,totalatk,totaldef,int(attacker[1]),int(defender[1]))
+                dmg = calcDamage(choice,totalatk,totaldef,int(attacker[1]),int(defender[1]),attacker[0],defender[0])
 	elif choice == 5: # Guard 
-		if FIGHT_VERBOSE: log("{0} goes on guard!".format(p1))
-		writeHistory(p1,p2,"{0} went on guard!".format(p1))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} goes on guard!".format(p1))
 		atkcount = int(attacker[15])
                 setFighterStats(fname=attacker[0],grdsincelvl=(atkcount + 1))
                 setFighterStats(fname=p1,tmpstat='grd',tmpbuff=10)
@@ -661,8 +663,7 @@ def resolveAttack(choice,p1,p2,mod=None):
 		results.append("{0} takes a defensive stance".format(attacker[0]))
 		return results
 	elif choice == 6: # Magic Guard
-		if FIGHT_VERBOSE: log("{0} is meditating!".format(p1))
-		writeHistory(p1,p2,"{0} meditated!".format(p1))
+		if FIGHT_VERBOSE: log(p1,p2,"{0} is meditating!".format(p1))
 		atkcount = int(attacker[16])
                 setFighterStats(fname=attacker[0],mgrdsincelvl=(atkcount + 1))
                 setFighterStats(fname=p1,tmpstat='mdef',tmpbuff=10)
@@ -673,28 +674,25 @@ def resolveAttack(choice,p1,p2,mod=None):
 	else:
 		return False
 
-	if critChance() == 1:
+	if critChance(attacker[0],defender[0]) == 1:
 		dmg = dmg * 2
 		if dmg < 6: dmg = 6
-		if FIGHT_VERBOSE: log("== CRIT! ==")
-		writeHistory(p1,p2,"CRITICAL HIT! {0} damage!".format(dmg))
+		if FIGHT_VERBOSE: log(p1,p2,"== CRIT! ==")
 		if choice != 4: results.append("{0} {1}{2} {3} to {4}{5} for {6} CRITICAL damage".format(attacker[0].lower(),verbage[(random.randint(0,len(verbage)-1))].lower(),qualifiers[(random.randint(0,len(qualifiers)-1))].lower(),attackVerbs[random.randint(0,len(attackVerbs)-1)].lower(),defender[0].lower(),attackPreps[random.randint(0,len(attackPreps)-1)].lower(),dmg))
 		else: results.append("{0} mystically moves their hands while shouting \"hear me! {1}! i perform the {2} and cast {3} at my enemy!\" the spell hits for {4} CRITICAL damage".format(attacker[0].lower(),magicInvocations[(random.randint(0,len(magicInvocations)-1))].lower().strip('!'),magicRituals[(random.randint(0,len(magicRituals)-1))].lower(),magicSpells[random.randint(0,len(magicSpells)-1)].lower(),dmg))
 	else:
 		if dmg > 0: 
 			if choice != 4: 
 				results.append("{0} {1}{2} {3} to {4}{5} for {6} damage".format(attacker[0].lower(),verbage[(random.randint(0,len(verbage)-1))].lower(),qualifiers[(random.randint(0,len(qualifiers)-1))].lower(),attackVerbs[random.randint(0,len(attackVerbs)-1)].lower(),defender[0].lower(),attackPreps[random.randint(0,len(attackPreps)-1)].lower(),dmg))
-				writeHistory(attacker[0],defender[0],"{0} hit {1} for {2} damage!".format(attacker[0],defender[0],dmg))
 			else: 
 				results.append("{0} mystically moves their hands while shouting \"hear me! {1}! i perform the {2} and cast {3} at my enemy!\" the spell hits for {4} damage".format(attacker[0].lower(),magicInvocations[(random.randint(0,len(magicInvocations)-1))].lower().strip('!'),magicRituals[(random.randint(0,len(magicRituals)-1))].lower(),magicSpells[random.randint(0,len(magicSpells)-1)].lower(),dmg))
-				writeHistory(attacker[0],defender[0],"{0} hit {1} for {2} damage!".format(attacker[0],defender[0],dmg))
 		else:
 			dmg = 0
 			if choice != 4:	results.append("{0} deflects {1}'s attack!".format(defender[0],attacker[0]))
 			else: results.append("{0}'s spell doesnt affect {1}!".format(attacker[0],defender[0]))
-			writeHistory(attacker[0],defender[0],"Deflected!")
+			if FIGHT_VERBOSE: log(attacker[0],defender[0],"Deflected!")
 	resulthp = int(defender[6]) - dmg
-	writeHistory(attacker[0],defender[0],"HP Remaining --==-- {0}: {1}, {2}: {3}".format(defender[0],resulthp,attacker[0],attacker[6]))
+	if FIGHT_VERBOSE: log(attacker[0],defender[0],"HP Remaining --==-- {0}: {1}, {2}: {3}".format(defender[0],resulthp,attacker[0],attacker[6]))
 	setFighterStats(fname=defender[0],hp=resulthp)
-	writeHistory(attacker[0],defender[0],"=============================================================")
+	if FIGHT_VERBOSE: log(attacker[0],defender[0],"=============================================================")
 	return results

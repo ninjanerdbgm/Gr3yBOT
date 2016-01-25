@@ -37,9 +37,9 @@ class ChatterBotFactory:
 
     def create(self, type, arg = None):
         if type == ChatterBotType.CLEVERBOT:
-            return _Cleverbot('http://www.cleverbot.com/webservicemin', 35)
+            return _Cleverbot('http://www.cleverbot.com', 'http://www.cleverbot.com/webservicemin', 35)
         elif type == ChatterBotType.JABBERWACKY:
-            return _Cleverbot('http://jabberwacky.com/webservicemin', 29)
+            return _Cleverbot('http://jabberwacky.com', 'http://jabberwacky.com/webservicemin', 29)
         elif type == ChatterBotType.PANDORABOTS:
             if arg == None:
                 raise Exception('PANDORABOTS needs a botid arg')
@@ -71,8 +71,9 @@ class ChatterBotThought:
 
 class _Cleverbot(ChatterBot):
 
-    def __init__(self, url, endIndex):
-        self.url = url
+    def __init__(self, baseUrl, serviceUrl, endIndex):
+        self.baseUrl = baseUrl
+        self.serviceUrl = serviceUrl
         self.endIndex = endIndex
 
     def create_session(self):
@@ -89,23 +90,26 @@ class _CleverbotSession(ChatterBotSession):
         self.vars['sub'] = 'Say'
         self.vars['islearning'] = '1'
         self.vars['cleanslate'] = 'false'
+	self.cookieJar = CookieJar()
+	try:
+	        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cookieJar))
+	        self.opener.open(self.bot.baseUrl)
+	except:
+		print "Error with cleverbot."
+		pass
 
     def think_thought(self, thought):
-	self.vars['stimulus'] = thought.text
+        self.vars['stimulus'] = thought.text
         data = urllib.urlencode(self.vars)
         data_to_digest = data[9:self.bot.endIndex]
         data_digest = hashlib.md5(data_to_digest).hexdigest()
         data = data + '&icognocheck=' + data_digest
-	#--------------------------------------------------------------
-	# bgm's cookie modification.  Won't work without it.
-	#--------------------------------------------------------------
-        yummy = CookieJar()
-	cookieSesh = urllib2.build_opener(urllib2.HTTPCookieProcessor(yummy))
-	cookieSesh.open('http://www.cleverbot.com')
-	url_response = cookieSesh.open(self.bot.url, data)
-	#----------
-	# end mod
-	#----------
+	#-- bgm's cookie mod
+	#yummy = CookieJar()
+	#cookieSesh = urllib2.build_opener(urllib2.HTTPCookieProcessor(yummy))
+	#cookieSesh.open('http://www.cleverbot.com')
+	#- end mod
+        url_response = self.opener.open(self.bot.serviceUrl, data)
         response = url_response.read()
         response_values = response.split('\r')
         #self.vars['??'] = _utils_string_at_index(response_values, 0)

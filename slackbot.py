@@ -9,12 +9,28 @@ def sendPing(fromuser,touser,msg):
 	userlist = slack.users.list()
 	userlist = userlist.body['members']
 	for i in userlist:
-		#-- Modify the usernames here:
-		#
-		if touser.lower() == "d0xy": touser = "doxy"
-		if touser.lower() == "|bgm|": touser = "ninjanerdbgm"
-		if touser.lower() == i["name"].lower():
-			slack.chat.post_message(username='Gr3yBOT',link_names=1,channel='#general',text='{0} - @{1}: {2}'.format(fromuser,touser,msg))
-			return "Sent!"
+		with open('slack_aliases','r') as f:
+			f.seek(0)
+			lines = f.readlines()
+			for line in lines:
+				line = line.strip(' \r\n')
+				names=line.split('[-]')[1:]
+				for name in names:
+					if touser.lower() == line.split('[-]')[0].lower():
+						if i["name"].lower() == name.lower():
+							slack.chat.post_message(username='Gr3yBOT',link_names=1,channel='#general',text='{0} - @{1}: {2}'.format(fromuser,i["name"],msg))
+							return "Sent!"
+			f.close()
 	return "i dont know who dat is."
-3
+
+def findSlacker(username):
+	userlist = slack.users.list()
+	userlist = userlist.body['members']
+	found = 0
+	for i in userlist:
+		print i["name"]
+		if i["name"].lower() == username.lower():
+			found = 1
+	if found == 1:
+		return True
+	return False
