@@ -142,7 +142,7 @@ def log(text):
 def admins(nick, host):
 	bgm = re.compile('bgm@.+')
 	if VERBOSE: log("Host: {0}".format(host))
-	if (re.match(bgm, host)):
+	if re.match(bgm, host):
 		if VERBOSE: log("Found a matching admin nick.  Are they identified?")
 		sendraw('PRIVMSG NickServ :STATUS {0}'.format(nick))
                 time.sleep(1)
@@ -208,8 +208,10 @@ def strTranslate(text):
 	text = text.translate(None, "\t\r\n")
 	return text
 
-def makeBotText(text):
-	text = text.translate(None, "!?'")
+def makeBotText(text):	
+	text = text.translate(None, "!'")
+	if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)) < 1:
+		text = text.translate(None, "?")
 	text = text.lower()
 	return text
 	
@@ -1082,7 +1084,7 @@ def main(joined):
 						except:
 							rolls = 1
 						try:
-							sides =	int(totalroll[1])
+							sides =	int(totalroll[1].strip('\r\n'))
 						except:
 							if special == 0: send("you need to specify the amount of sides, like d20 or d10",getChannel(data))
 							else: usernick = getNick(data); privsend("you need to specify the amount of sides, like d20 or d10",usernick)
@@ -1098,10 +1100,14 @@ def main(joined):
 						equation = []
 						total = 0
 						try:
-							for i in range(0,rolls):
-								roll = (xOrShift() % sides) + 1
-								total = total + roll
-								if rolls < 20 and rolls > 1: equation.append(roll)
+							if rolls < 1000:
+								for i in range(0,rolls):
+									roll = (xOrShift() % sides) + 1
+									total = total + roll
+									if rolls < 20 and rolls > 1: equation.append(roll)
+							else:
+								send("im not smart enough to do that. go here: http://www.wolframalpha.com/input/?i=roll%201%20{1}-sided%20dice%20{2}%20times".format(sides,rolls))
+                                                                continue
 							if rolls >= 20: equation = "thats too many numbers for my digital fingers to type. just trust me that this is the total roll: {0}".format(total)
 							elif rolls > 1: 
 								lowest=equation[(equation.index(min(equation)))]
@@ -1112,9 +1118,10 @@ def main(joined):
 							elif rolls == 1: equation = "heres your roll: {0}".format(total)
 							if special == 0: send(equation,getChannel(data))
 							else: usernick = getNick(data); privsend(equation,usernick)
-						except OverflowError:
+						except Exception as e:
 							if special == 0: send("lets just say you rolled a natural 20",getChannel(data))
 							else: usernick = getNick(data); privsend("lets just say you rolled a natural 20", usernick)
+							if VERBOSE: log("ERROR: Couldn't display dice roll: {}".format(str(e)))
 							continue
 				
 					# GET A TWITTER FEED
