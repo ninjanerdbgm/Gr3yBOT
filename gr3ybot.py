@@ -140,20 +140,23 @@ def log(text):
 	g.close()
 
 def admins(nick, host):
-	bgm = re.compile('bgm@.+')
-	if VERBOSE: log("Host: {0}".format(host))
-	if re.match(bgm, host):
-		if VERBOSE: log("Found a matching admin nick.  Are they identified?")
-		sendraw('PRIVMSG NickServ :STATUS {0}'.format(nick))
-                time.sleep(1)
-                rawdata = irc.recv(1024)
-		if "{0} 3 {0}".format(nick) in rawdata:
-			return 1
-		else:
-			status = 2
-	else:
-		status = 0
-	return status
+	if VERBOSE: log("Call for an admin check.  Is {} an admin?".format(host))
+	for thing in ADMINLIST:
+		isAdmin = re.compile(thing+'@.+')
+		if (re.match(isAdmin, host)):
+			if VERBOSE: log("Found a matching admin nick.  Are they identified?")
+			sendraw('PRIVMSG NickServ :STATUS {0}'.format(nick))
+                	time.sleep(1)
+			try:
+		                rawdata = irc.recv(1024)
+			except Exception as e:   
+				if VERBOSE: log("ERROR: Couldn't fetch admin status.")
+				return 0
+			if "{0} 3 {0}".format(nick) in rawdata:
+				return 1
+			else:
+				return 2
+	return 0
 
 def getHost(host):
 	host = host.split('!')[1]
@@ -204,24 +207,50 @@ def getRandomPerson(data,chan=channel):
 	else: person = names[random.randint(0,len(names) - 1)]
 	return person
 
+def makeEncode(text):
+	try:
+		text = unicode(text, encoding='utf8')
+		return text
+	except UnicodeDecodeError:
+		try:
+			text = unicode(text, encoding='cp1252')
+			return text
+		except UnicodeDecodeError:
+			try:
+				text = unicode(text, encoding='iso8859-1')
+				return text
+			except UnicodeDecodeError:
+				try:
+					text = unicode(text, encoding='ascii')
+					return text
+				except Exception as e:
+					if VERBOSE: log("ERROR: Couldn't display text: {}".format(str(e)))
+					return False
+
 def strTranslate(text):
-	text = text.translate(None, "\t\r\n")
+	text = str(text).translate(None, "\r\n")
 	return text
 
-def makeBotText(text):	
-	text = text.translate(None, "!'")
+def makeBotText(text):
+	text = str(text).translate(None, "'")
 	if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)) < 1:
-		text = text.translate(None, "?")
+		text = str(text).translate(None, "?")
 	text = text.lower()
 	return text
 	
 def cleanText(text, tell=False):
-	if len(text) > 450: text = text[:445] + '[CUT]'
-	text = text.encode('utf-8','ignore')
+	if len(text) > 490: text = text[:485] + '[CUT]'
 	text = strTranslate(text)
 	if not tell:
 		text = makeBotText(text)
+	text = makeEncode(text)
 	return text
+
+def bufferData(data):
+	if "\r" not in data or "\n" not in data: return False
+	data = data[:data.index("\r\n")+len("\r\n")]
+	return data
+	
 
 def getMessage(data):
 	try:
@@ -251,7 +280,7 @@ def quit(chan):
 
 def send(msg,chan=channel,tell=False):
 	msg = cleanText(msg,tell)
-	irc.send('PRIVMSG ' + chan + ' :{0}\r\n'.format(msg))
+	if msg != False: irc.send('PRIVMSG ' + chan + ' :{0}\r\n'.format(msg))
 
 def fightsend(msg,tell=False):
 	msg = cleanText(msg,tell)
@@ -374,10 +403,15 @@ def main(joined):
 	while True:
 		special = 0
 		action = 'none'
+
 		try:
 			data = irc.recv(1024)
 		except:
 			continue
+		data = bufferData(data)
+		if data == False:
+			continue
+
 		if len(data) == 0:
 			if VERBOSE: 
 				log("\n============================================\nFATAL ERROR:\n============================================")
@@ -1216,7 +1250,7 @@ def main(joined):
 						if VERBOSE: log("{0} tweeted: {1}".format(fromnick, q))
 						sendraw("NAMES {0}".format(channel))
 						time.sleep(1)
-						rawdata = irc.recv(1024)
+						rawdata = irc.recv(2048)
 						person = getRandomPerson(rawdata)
 						send("ok i tweeted that. i hope i didnt sound like {0}.".format(person),getChannel(data)) if special == 0 else privsend("ok i tweeted that i hope i didnt sound like you",sender)
 						time.sleep(1)
@@ -1349,7 +1383,7 @@ def main(joined):
                             				touser = getNick(data)
 						sendraw("NAMES {0}".format(channel))
 						time.sleep(1)
-						rawdata = irc.recv(1024)
+						rawdata = irc.recv(2048)
 			                        channicks = getChatters(rawdata)
 						for i in channicks:
 							if touser.lower() in i.lower(): touser = i
@@ -1380,7 +1414,7 @@ def main(joined):
 									if (" ".join(msg.split(' ')[2:]).lower() == "is alive"):
 										sendraw("NAMES {0}".format(channel))
 										time.sleep(1)
-										rawdata = irc.recv(1024)					
+										rawdata = irc.recv(2048)					
 										channicks = getChatters(rawdata)
 										found = 0
 										for i in channicks:
@@ -1394,7 +1428,7 @@ def main(joined):
 									else:
 										sendraw("NAMES {0}".format(channel))
 	                                    					time.sleep(1)
-						                                rawdata = irc.recv(1024)
+						                                rawdata = irc.recv(2048)
 						                                channicks = getChatters(rawdata)
 	                                    					found = 0
 						                                for i in channicks:
@@ -1514,7 +1548,7 @@ def main(joined):
 							if infight == 0:
 								sendraw("NAMES {0}".format(fightchan))
 								time.sleep(1)
-								rawdata = irc.recv(1024)
+								rawdata = irc.recv(2048)
 		                                                person = getRandomPerson()
 								while person.lower() == name.lower(): person = getRandomPerson(rawdata)
 								fightsend("you arent fighting anyone right now.  youd better start with {0} or maybe someone else, idk.".format(person))
@@ -1563,7 +1597,7 @@ def main(joined):
 				                        if infight == 0:
 								sendraw("NAMES {0}".format(fightchan))
 								time.sleep(1)
-								rawdata = irc.recv(1024)
+								rawdata = irc.recv(2048)
 		                                                person = getRandomPerson(rawdata)
 								if person == "lonely":
 									fightsend("youre the only one in this chat. go find some friends.")
@@ -1646,7 +1680,7 @@ def main(joined):
 							if challenger.lower() == fighter.lower(): fightsend("no masochism allowed in chat thats like rule 3 or something."); continue
 							sendraw("NAMES {0}".format(fightchan))
 							time.sleep(1)
-							rawdata = irc.recv(1024)
+							rawdata = irc.recv(2048)
 							channicks = getChatters(rawdata)
 							if not channicks: 
 								time.sleep(2)
@@ -2048,7 +2082,11 @@ def main(joined):
 					lastTime = time.time()
 					if data.lower().find(botname.lower() + ':') != -1: # Did someone say "botname: "?
 						msg = getMessage(data)
-						msg = msg.lower().split(botname.lower())[1:]
+						try:
+							msg = msg.lower().split(botname.lower())[1:]
+						except Exception as e:
+							if VERBOSE: log("ERROR: Couldn't fetch message: {}".format(str(e)))
+							continue
 						msg = " ".join(msg)
 						msg = msg.translate(None, "\t\r\n")
 						msg = msg.replace(':', '', 1)
