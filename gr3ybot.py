@@ -1223,22 +1223,22 @@ def main(joined):
 									if e.message[0]['code'] == 88:
 										print "rate limit: {0}".format(getRateLimit())
 										send("im making too many calls to twitter and the twitter hates when i do that.  try again later.",getChannel(data))
-								continue
-							send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),getChannel(data))
-							time.sleep(1)
-							mag = getTweet(fol)
-							for tweet in mag:
-								try: # Is the message a retweet?  Let's grab it and specify that it's an RT
-									mag = tweet.retweeted_status.text
-									getrt = tweet.text.split('@')[1].split(':')[0]
-									mag = "RT @{0}: {1}".format(getrt,mag)									
-								except AttributeError as e:
-									if LOGLEVEL >= 1: log("Non-fatal issue with tweet: {0}".format(str(e)))
-									mag = tweet.text
-								fol = fol.encode('utf-8')
-								send("@{0} >> {1}".format(fol,mag),getChannel(data))
-								if LOGLEVEL >= 1: log("@{0} >> {1}".format(fol,mag))
-								send("follow {} to get your tweets in here".format(twittername),getChannel(data))
+									continue
+								send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),getChannel(data))
+								time.sleep(1)
+								mag = getTweet(fol)
+								for tweet in mag:
+									try: # Is the message a retweet?  Let's grab it and specify that it's an RT
+										mag = tweet.retweeted_status.text
+										getrt = tweet.text.split('@')[1].split(':')[0]
+										mag = "RT @{0}: {1}".format(getrt,mag)									
+									except AttributeError as e:
+										if LOGLEVEL >= 1: log("Non-fatal issue with tweet: {0}".format(str(e)))
+										mag = tweet.text
+									fol = fol.encode('utf-8')
+									send("@{0} >> {1}".format(fol,mag),getChannel(data))
+									if LOGLEVEL >= 1: log("@{0} >> {1}".format(fol,mag))
+									send("follow {} to get your tweets in here".format(twittername),getChannel(data))
 								continue
 							tweetnick = "".join(c for c in tweetnick if c not in ('\r', '\n', '\t')) # Strip any weird formatting in the user name.  Yes, this is a thing that happens.
 							msg = getTweet(tweetnick)
