@@ -29,6 +29,10 @@ https://greynoi.se
 		      - Automatic News Article summarization
 		      - Automatic Youtube video information
 		      - Slack integration for cell phone pinging
+			  
+		  NEW with 1.91:
+			  - Better data collection and aggregation
+			  - Added the ability for the bot to decode QR codes from a supplied URL
 	      
               And of course,
               - Displays latest GR3YNOISE podcast info
@@ -59,3 +63,14 @@ https://greynoi.se
 
       --== IMPORTANT!! ==--
             Make sure you open gr3ybot_settings.py and configure the bot before attempting to run it.
+
+	  NEW in 1.91:
+		- QR Code Decoding
+			
+			For QR code decoding, even more dependencies are required:
+				- python-qrtools (sudo apt-get install python-qrtools)
+					NOTE:
+						If you're getting an error message saying qrtools doesn't exist, try this:
+						sudo apt-get install libzbar-dev
+						sudo pip install zbar
+						sudo pip install Image

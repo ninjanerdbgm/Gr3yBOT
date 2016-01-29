@@ -55,6 +55,7 @@ from time import sleep, strftime, localtime
 import threading
 import urllib
 import urllib2
+import urlparse
 import json
 from pytz import timezone
 import pytz
@@ -62,6 +63,7 @@ from wiki import wiki
 import datetime
 import feedparser
 import re
+if QR_ENABLED: import qrtools
 from fightbot import *
 from wolfbot import *
 
@@ -429,6 +431,7 @@ def main(joined):
 	lastPing = time.time()
 	readBuffer = ""
 	while True:
+		time.sleep(0.5)
 		special = 0
 		action = 'none'
 
@@ -454,7 +457,7 @@ def main(joined):
 			continue
 
 		for data in f:
-			if (time.time() - lastPing) > threshold:
+			if (time.time() - lastPing) > threshold or len(raw) == 0:
 				if LOGLEVEL >= 1: 
 					log("\n============================================\nFATAL ERROR:\n============================================")
 					log("The bot has been disconnected from the server.  Reconnecting...")
@@ -873,6 +876,33 @@ def main(joined):
 							if LOGLEVEL >= 1: log("Suggesting: {0} ({1} stars from {2} reviews).  URL: {3}".format(name,rating,reviews,url))
 							if special == 0: send("maybe you should try {0}? ({1} stars from {2} reviews). more info: {3}".format(name,rating,reviews,url),getChannel(data))
 							else: usernick = getNick(data); privsend("maybe you should try {0}? ({1} stars from {2} reviews). more info: {3}".format(name,rating,reviews,url),usernick)
+
+						# QR DECODE
+						if info[0].lower() == 'qr' and QR_ENABLED:
+							try:
+								qrurl = str(info[1])
+							except IndexError:
+								send("give me the exact link you want decoded",getChannel(data)) if special == 0 else privsend("give me the exact link you want decoded",getNick(data))
+								continue
+							regex = (r'(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*\.(?:jpg|gif|png|jpeg))(?:\?([^#]*))?(?:#(.*))?')
+							if len(qrurl) > 0 and re.match(regex, qrurl):
+								send("ok let me get my phone out real quick",getChannel(data)) if special == 0 else privsend("ok let me get my phone out real quick",getNick(data))
+								qr = qrtools.QR()
+								try:
+									path = urlparse.urlparse(qrurl).path
+									ext = os.path.splitext(path)[1]
+									ext = ext.translate(None, '\r\n')
+									urllib.urlretrieve(qrurl, 'lastqr'+ext)
+									qr.decode('lastqr'+ext)
+									send("i think it says: {}".format(qr.data),getChannel(data)) if special == 0 else privsend("i think it says: {}".format(qr.data),getNick(data))
+								except Exception as e:
+									if LOGLEVEL >= 1: log("ERROR: Can't decode QR code: {}".format(str(e)))
+									send("oops i dropped my phone and now i cant read qr codes sorry",getChannel(data)) if special == 0 else privsend("oops I dropped my phone and now i cant read qr codes sorry",getNick(data))
+									continue
+							else:
+								send("thats not a qr code",getChannel(data)) if special == 0 else privsend("thats not a qr code",getNick(data))
+								continue
+							
 
 						# URBAN DICTIONARY			
 						if info[0].lower() == 'define' and URBANDICT_ENABLED:
