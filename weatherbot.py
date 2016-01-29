@@ -56,7 +56,7 @@ def getWeather(loc):
 	# Let's get the Where On Earth ID...
 	url = 'http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.places%20where%20text=%22{0}%22'.format(loc)
 	r = requests.get(url)
-	soup = BeautifulSoup(r.content)
+	soup = BeautifulSoup(r.content, 'lxml')
 	for breaks in soup.find_all('br'):
 		breaks.extract()
 	try:

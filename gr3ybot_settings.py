@@ -14,7 +14,7 @@ server = ''
 port = 6667
 channelpw = ''
 botname = 'Gr3yBot'
-version = "1.9. Version Name: Mr. Saturn"
+version = "1.91. Version Name: Frankystein Mk. III"
 
 # Set channels to join.  The first channel will be
 # set as the main channel.  
@@ -55,13 +55,12 @@ server_slug = ''
 #       LOCALTZ
 #               Set to your local timezone, for logging.  More info:
 #               http://stackoverflow.com/questions/13866926/python-pytz-list-of-timezones
-#       VERBOSE
-#               Set this to True if you want to output all of the bot's calls and
-#               processes to the screen.
-#               Set to False if you don't want to see any of that nonsense.
-#       CHATLOG
-#               Set this to True if you want to display the chatlog as the bot runs.
-#               Set to False if you don't.
+#	LOGLEVEL
+#		Set the verbosity of the bot's log.
+#		0 - No logging.
+#		1 - Basic action logging
+#		2 - Basic action and chat logging
+#		3 - Basic actions, chat, and the entire data stream logging
 #       FIGHT_VERBOSE
 #               Set this to True if you want to see the fight dice rolls and
 #               damage calculations.
@@ -70,11 +69,10 @@ server_slug = ''
 #		bot's log.
 LOGFILE = 'bot.log'
 ECHO_LOG = True
-
 LOCALTZ = 'US/Pacific'
 
-VERBOSE = True
-CHATLOG = False
+LOGLEVEL = 1
+
 FIGHT_VERBOSE = True
 FIGHTLOG = 'fightinfo.log'
 
