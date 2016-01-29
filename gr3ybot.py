@@ -421,7 +421,6 @@ def main(joined):
 	lastPing = time.time()
 	readBuffer = ""
 	while True:
-		time.sleep(1)
 		special = 0
 		action = 'none'
 
