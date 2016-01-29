@@ -13,7 +13,7 @@ def getWord(word):
 	word = "%20".join(word)
 	url = 'http://www.urbandictionary.com/define.php?term={0}'.format(word)
 	r = requests.get(url)
-	soup = BeautifulSoup(r.content)
+	soup = BeautifulSoup(r.content, "lxml")
 	for breaks in soup.find_all('br'):
 		breaks.extract()
 	try:

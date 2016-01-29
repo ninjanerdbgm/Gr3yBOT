@@ -1046,6 +1046,7 @@ def main(joined):
 								if WIKIPEDIA_ENABLED: privsend("%wiki/%wikipedia/%lookup/%search <string> -=- search wikipedia for <string> and return a quick summary.", name)
 								if URBANDICT_ENABLED: privsend("%define <word(s)> -=- define stuff from urbandictionary.", name)
 								privsend("%weather <location> -=- get the weather forecast for <location>", name)
+								if QR_ENABLED: privsend("%qr <url> -=- supply a url to a qr code image and ill try to see what it says",name)
 								privsend(" ", name)
 								time.sleep(.5)
 								privsend("%info -=- displays the latest podcast info", name)
