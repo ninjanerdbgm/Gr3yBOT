@@ -108,7 +108,7 @@ def connect():
 	print "Setting nickname to {0}...".format(botname)
 	irc.send ( 'NICK {0}\r\n'.format(botname) )
 	print "Identifying the bot..."
-	irc.send ( 'USER {0} {1} {2} :Python-powered IRC bot to help moderate #synackpack\r\n'.format(botname,botname,botname) )
+	irc.send ( 'USER {0} {1} {2} :Python-powered IRC bot to help moderate #Greynoisepack\r\n'.format(botname,botname,botname) )
 	print "Joining the channels..."
 	channel = channels[0]
 	for c in channels:
@@ -999,7 +999,7 @@ def main(joined):
 								if PING_ENABLED: privsend("%ping <nick> <message> -=- send a message to <nick> via slacker.  this should ping their phone.  message is optional.  want to be able to be pinged? type %help ping", name)
 								privsend("%remindme <timeframe> - <message> -=- remind yourself to do something in the future. %help reminders for more info", name)
 								time.sleep(.5)
-								if TWITTER_ENABLED: privsend("%tweet <message> -=- make synackbot send a tweet containing <message>.", name)
+								if TWITTER_ENABLED: privsend("%tweet <message> -=- make Greynoisebot send a tweet containing <message>.", name)
 								if TWITTER_ENABLED: privsend("%twit <user> -=- <user> is optional.  retrieves the last tweet from <user> or from a random follower", name)
 								time.sleep(.5)
 								if YELP_ENABLED: 
@@ -1210,7 +1210,7 @@ def main(joined):
 								if LOGLEVEL >= 1: log("Doesn't Exist")
 								continue
 							if msg == "-*501":
-								send("@{0}'s profile is private and bigoted and hates synackbot because they wont let me follow them, so i cant see their tweets".format(tweetnick),getChannel(data))
+								send("@{0}'s profile is private and bigoted and hates me because they wont let me follow them, so i cant see their tweets".format(tweetnick),getChannel(data))
 								if LOGLEVEL >= 1: log("Not Authorized")
 								continue
 							if len(msg) == 0:
