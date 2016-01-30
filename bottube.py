@@ -43,7 +43,7 @@ def getVideo(term):
 # matching videos, channels, and playlists.
 	for search_result in search_response.get("items", []):
 		if search_result["id"]["kind"] == "youtube#video":
-			if VERBOSE: log("Found a YouTube video matching ID: {0} (URL: https://www.youtube.com/watch?v={0})".format(term))
+			if LOGLEVEL >= 1: log("Found a YouTube video matching ID: {0} (URL: https://www.youtube.com/watch?v={0})".format(term))
 			results.append("{0}".format(search_result["snippet"]["title"].encode('utf-8')))
 			break
 	url='https://www.googleapis.com/youtube/v3/videos?id={0}&part=contentDetails&key={1}'.format(term,YOUTUBE_DEVELOPER_KEY)
@@ -69,5 +69,5 @@ def getVideo(term):
 	if int(duration[2]) < 10 and duration[2] != '00': duration[2] = "0{0}".format(duration[2])
 	duration = ":".join(duration)
 	results.append(duration)
-	if VERBOSE: log("Video Info --==-- Title: {0}, Length: {1}".format(results[0],results[1]))
+	if LOGLEVEL >= 1: log("Video Info --==-- Title: {0}, Length: {1}".format(results[0],results[1]))
 	return results
