@@ -543,6 +543,7 @@ def levelUp(person):
 	p1 = getFighterStats(person)
 	currentxp = int(p1[7])
 	currentlvl = p1[1]
+	equipped = []
 	with open('inventories','r') as f:
                 updated=0
                 lines = f.readlines()
@@ -551,6 +552,7 @@ def levelUp(person):
                         if line.split('/')[0].lower() == person.lower():
                         	for itemId in line.split('/')[1].split(','):
 					if len(itemId.rstrip()) == 4:
+						equipped.append(itemId)
 	                                	unequipItem(person,itemId)
 			else: continue
 	setFighterStats(fname=person,lvl=int(currentlvl)+1,hp=getMaxHPByLevel(int(currentlvl)+1))
@@ -608,7 +610,7 @@ def levelUp(person):
                 f.seek(0)
                 for line in lines:
                         if line.split('/')[0].lower() == person.lower():
-                                for itemId in line.split('/')[2].split(','):
+                                for itemId in equipped:
 					if len(itemId.rstrip()) == 4:
 	                                        equipItem(person,itemId.rstrip())
                         else: continue
