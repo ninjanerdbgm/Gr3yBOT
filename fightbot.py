@@ -317,9 +317,10 @@ def equipItem(person,itemno):
 							updated = '3' + itemId
 							equippedItems = line.split('/')[1]
 	                                                unequippedItems = line.split('/')[2]
+							itemStats = getItemByItemNo(itemno)
+		                                        unitemStats = getItemByItemNo(itemId)
         	                                        f.write('{0}/{1},{2}/{3},{4}\r\n'.format(person,str.replace(equippedItems,',' + itemId,''),itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n'),itemId))
-                	                                itemStats = getItemByItemNo(itemno)
-                        	                        setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
+                        	                        setFighterStats(fname=person,atk=int(itemStats[2])+(int(stats[2]) - int(unitemStats[2])),grd=int(itemStats[3])+(int(stats[3]) - int(unitemStats[3])),mag=int(itemStats[4])+(int(stats[4]) - int(unitemStats[4])),mdef=int(itemStats[5])+(int(stats[5]) - int(unitemStats[5])),hp=int(itemStats[6])+(int(stats[6]) - int(unitemStats[6])))
 							continue
 				else:
 					accCount = 0

@@ -1755,7 +1755,7 @@ def main(joined):
 									if out == 0: fightsend("you don't have an inventory yet.  fight more")
 									if out == 1: fightsend("ok now youre so super strong")
 									if out == 2: fightsend("maybe you should acquire that item first")
-									if out.startswith('3'): 
+									if str(out).startswith('3'): 
 										unItem = getItemByItemNo(out[1:5])
 										fightsend("ok its equipped but i had to unequip your {} first.".format(unItem[0]))
 									if out == 4: fightsend("you already have 2 accessories equipped.  unequip one of them first")
@@ -1763,7 +1763,7 @@ def main(joined):
 									if out == 0: privsend("you don't have an inventory yet.  fight more",person)
 									if out == 1: privsend("ok now youre so super strong",person)
 									if out == 2: privsend("maybe you should acquire that item first",person)
-									if out.startswith('3'):
+									if str(out).startswith('3'):
                                                                                 unItem = getItemByItemNo(out[1:5])
                                                                                 privsend("ok its equipped but i had to unequip your {} first.".format(unItem[0]),person)
 									if out == 4: privsend("you already have 2 accessories equipped.  unequip one of them first",person)
