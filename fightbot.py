@@ -314,8 +314,12 @@ def equipItem(person,itemno):
 				if itemno[0:2] != "04":
 					for itemId in line.split('/')[1].split(','):
 						if itemno[0:2] == itemId[0:2]:
-							updated = 3
-							f.write(line)
+							updated = '3' + itemId
+							equippedItems = line.split('/')[1]
+	                                                unequippedItems = line.split('/')[2]
+        	                                        f.write('{0}/{1},{2}/{3},{4}\r\n'.format(person,str.replace(equippedItems,',' + itemId,''),itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n'),itemId))
+                	                                itemStats = getItemByItemNo(itemno)
+                        	                        setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
 							continue
 				else:
 					accCount = 0

@@ -100,6 +100,7 @@ matchbot = botname.lower()
 def connect():
 	global irc
 	irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
+	irc.settimeout(10)
 	print "Connecting to {0}:{1}".format(server,port)
 	irc.connect((server,port))
 	irc.setblocking(False)
@@ -453,17 +454,26 @@ def main(joined):
 			readBuffer = readBuffer + raw
 			f = readBuffer.split('\n')
 			readBuffer = f.pop()
+		except socket.error as e:
+			try:
+				raw = irc.recv(2048)
+				readBuffer = readBuffer + raw
+	                        f = readBuffer.split('\n')
+	                        readBuffer = f.pop()
+			except Exception as e:
+				if LOGLEVEL >= 1 and "[Errno 11]" not in str(e): log("ERROR: {}".format(str(e)))
+				continue
 		except:
 			continue
 
 		for data in f:
-			if (time.time() - lastPing) > threshold or len(raw) == 0:
+			if (time.time() - lastPing) > threshold:
 				if LOGLEVEL >= 1: 
 					log("\n============================================\nFATAL ERROR:\n============================================")
 					log("The bot has been disconnected from the server.  Reconnecting...")
 					log("\n============================================\nEND OF ERROR\n============================================")
 				try:
-					sendPing("Gr3yBot","bgm","The bot died.  Check the logs for info.")
+					#sendPing("Gr3yBot","bgm","The bot died.  Check the logs for info.")
 					lastPing = time.time()
 				except Exception as e:
 					log("Could not send ping to bgm for reason: {}".format(str(e)))
@@ -1745,13 +1755,17 @@ def main(joined):
 									if out == 0: fightsend("you don't have an inventory yet.  fight more")
 									if out == 1: fightsend("ok now youre so super strong")
 									if out == 2: fightsend("maybe you should acquire that item first")
-									if out == 3: fightsend("you already have equipment of that kind equipped.  unequip the old stuff first.")
+									if out.startswith('3'): 
+										unItem = getItemByItemNo(out[1:5])
+										fightsend("ok its equipped but i had to unequip your {} first.".format(unItem[0]))
 									if out == 4: fightsend("you already have 2 accessories equipped.  unequip one of them first")
 								if special == 1:
 									if out == 0: privsend("you don't have an inventory yet.  fight more",person)
 									if out == 1: privsend("ok now youre so super strong",person)
 									if out == 2: privsend("maybe you should acquire that item first",person)
-									if out == 3: privsend("you already have equipment of that kind equipped.  unequip the old stuff first.",person)
+									if out.startswith('3'):
+                                                                                unItem = getItemByItemNo(out[1:5])
+                                                                                privsend("ok its equipped but i had to unequip your {} first.".format(unItem[0]),person)
 									if out == 4: privsend("you already have 2 accessories equipped.  unequip one of them first",person)
 								continue
 
