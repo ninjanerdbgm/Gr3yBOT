@@ -1702,7 +1702,7 @@ def main(joined):
 									for thing in equippedItems.split(','):
 										if len(thing.rstrip()) == 4:
 											item = getItemByItemNo(thing)
-											privsend("{0} (atk: {1}, def: {2}, magatk: {3}, magdef: {4}, hp gain: {5}). {6}. Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
+											privsend("--== {0} ==-- (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
 								privsend("{} unequipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
 								if len(unequippedItems) == 0: privsend("none",person)
 								for thing in unequippedItems.split(','):
@@ -2212,7 +2212,7 @@ def main(joined):
 			                                                                continue
 										if LOGLEVEL >= 1: log("{0} got an item from the fight! They got: {1}".format(itemPerson,item[0]))
 			                                                        privsend("After the fight, you found a treasure chest.",itemPerson)
-			                                                        privsend("In the chest was: {0} (Atk: {1}, Def: {2}, MagAtk: {3}, MagDef: {4}, HP: {5}). {6}.  Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],itemNo),itemPerson)
+			                                                        privsend("In the chest was: --== {0} ==-- (Atk: {1} || Def: {2} || MagAtk: {3} || MagDef: {4} || HP Gain: {5}). --== {6}. ==--  Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],itemNo),itemPerson)
 			                                                        updateInventory(itemPerson,itemNo)
 			                                                        privsend("It's been added to your inventory.  To see your inventory, type %fight inventory",itemPerson)
 										privsend("To equip it now, type %fight equip {}".format(itemNo),itemPerson)
