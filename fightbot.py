@@ -320,7 +320,7 @@ def equipItem(person,itemno):
 				else:
 					accCount = 0
 					for itemId in line.split('/')[1].split(','):
-						if itemno[0:1] == itemId[0:1]:
+						if itemno[0:2] == itemId[0:2]:
 							accCount += 1
 						if accCount == 2:
 							updated = 4
