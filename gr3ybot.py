@@ -1780,11 +1780,11 @@ def main(joined):
                                                                 if special == 0:
                                                                         if out == 0: fightsend("you don't have an inventory yet.  fight more")
                                                                         if out == 1: fightsend("ok now youre so super weak")
-                                                                        if out == 2: fightsend("you dont even know what that item is")
+                                                                        if out == 2: fightsend("you dont have that item equipped")
                                                                 if special == 1:
                                                                         if out == 0: privsend("you don't have an inventory yet.  fight more",person)
                                                                         if out == 1: privsend("ok now youre so super weak",person)
-                                                                        if out == 2: privsend("you dont even know what that item is",person)
+                                                                        if out == 2: privsend("you dont have that item equipped",person)
                                                                 continue
 								
 
@@ -2215,7 +2215,7 @@ def main(joined):
 			                                                        privsend("In the chest was: {0} (Atk: {1}, Def: {2}, MagAtk: {3}, MagDef: {4}, HP: {5}). {6}.  Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],itemNo),itemPerson)
 			                                                        updateInventory(itemPerson,itemNo)
 			                                                        privsend("It's been added to your inventory.  To see your inventory, type %fight inventory",itemPerson)
-										privsend("To equip it now, type %fight equip {}".format(itemNo))
+										privsend("To equip it now, type %fight equip {}".format(itemNo),itemPerson)
 							else:
 								fightsend("maybe you need to look at %fight help.  or learn how to read.  one of the two.")
 							
