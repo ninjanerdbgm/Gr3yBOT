@@ -259,6 +259,116 @@ def critChance(p1,p2):
 	if FIGHT_VERBOSE: log(p1,p2,"No crit")
 	return 0
 
+def getRandomItem():
+	seed = int(time.time()  * os.getpgid(0)) + xOrShift() # Set the seed for the itemlist
+	randomItems = []
+	itemCat = (seed % 4) + 1 # Get the item category
+	itemChance = ((seed + (xOrShift() * time.time()) + 1) % 100)
+	with open('equipmentlist','r') as f:
+		lines = f.readlines()
+		f.seek(0)
+		for line in lines:
+			if line.startswith('0' + str(itemCat)):
+				itemNum = line.split(' - ')[0]
+				lineParts = line.split(' - ')[1].split('/')
+				if int(lineParts[1]) > itemChance:
+					randomItems.append(itemNum)
+	f.close()
+	if len(randomItems) == 0: return False
+	return randomItems
+
+def getItemByItemNo(itemno):
+	lineParts = []
+	with open('equipmentlist','r') as f:
+		lines = f.readlines()
+		f.seek(0)
+		for line in lines:
+			if line.startswith(itemno):
+				lineParts = line.split(' - ')[1].split('/')
+	f.close()
+	if len(lineParts) == 0: return False
+	return lineParts
+
+def updateInventory(person,itemno):
+	with open('inventories','r+') as f:
+		wroteline=0
+		lines = f.readlines()
+		f.seek(0)
+		for line in lines:
+			if line.split('/')[0].lower() == person.lower():
+				line = line.strip('\r\n') + ',{}\r\n'.format(itemno)
+				wroteline=1
+			f.write(line)
+		if wroteline == 0:
+			f.write('{0}//{1}\r\n'.format(person,itemno))
+	f.close()
+
+def equipItem(person,itemno):
+	stats = getFighterStats(person)
+	with open('inventories','r+') as f:
+		updated=0
+		lines = f.readlines()
+		f.seek(0)
+		for line in lines:
+			if line.split('/')[0].lower() == person.lower():
+				if itemno[0:2] != "04":
+					if itemno[0:2] in line.split('/')[1]:
+						updated = 3
+						f.write(line)
+						continue
+				else:
+					if line.split('/')[1].count(itemno[0:2]) == 2:
+						updated = 4
+						f.write(line)
+						continue
+				if itemno in line.split('/')[2]:
+					equippedItems = line.split('/')[1]
+					unequippedItems = line.split('/')[2]
+					f.write('{0}/{1},{2}/{3}\r\n'.format(person,equippedItems,itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n')))
+					itemStats = getItemByItemNo(itemno)
+					setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
+					updated = 1
+				else: 
+					updated = 2
+					f.write(line)
+			else: f.write(line)
+	f.close()
+	return updated
+
+def unequipItem(person,itemno):
+	stats = getFighterStats(person)
+        with open('inventories','r+') as f:
+                updated=0
+                lines = f.readlines()
+                f.seek(0)
+                for line in lines:
+                        if line.split('/')[0].lower() == person.lower():
+                                if itemno in line.split('/')[1]:
+                                        equippedItems = line.split('/')[1]
+					unequippedItems = line.split('/')[2]
+                                        f.write('{0}/{1}/{3},{2}\r\n'.format(person,str.replace(equippedItems,',' + itemno,''),itemno,unequippedItems.strip('\r\n')))
+					itemStats = getItemByItemNo(itemno)
+                                        setFighterStats(fname=person,atk=int(stats[2])-int(itemStats[2]),grd=int(stats[3])-int(itemStats[3]),mag=int(stats[4])-int(itemStats[4]),mdef=int(stats[5])-int(itemStats[5]),hp=int(stats[6])-int(itemStats[6]))
+                                        updated = 1
+                                else: 
+					updated = 2
+					f.write(line)
+			else: f.write(line)
+        f.close()
+        return updated
+
+def getInventory(person):
+	inventory = []
+	with open('inventories','r') as f:
+		lines = f.readlines()
+		f.seek(0)
+		for line in lines:
+			if line.split('/')[0].lower() == person.lower():
+				inventory = line.split('/')
+	f.close()
+	if len(inventory) == 0: return False
+	return inventory
+
 def getXPGain(winner,loser):
 	p1 = getFighterStats(winner)
 	p2 = getFighterStats(loser)
@@ -331,21 +441,36 @@ def getFighterStats(name):
 		return False
 
 def doesItMiss(choice,p1lev,p2lev,p1,p2):
+	attackerEquipment = getInventory(p1)
+	defenderEquipment = getInventory(p2)
+	if attackerEquipment: attackerEquipment = attackerEquipment[1]
+	if defenderEquipment: defenderEquipment = defenderEquipment[1]
 	diff = int(round(((p1lev - p2lev) / 4) - 0.5)) # For every 4 levels the attacker is above the defender, they get a bonus to their to-hit.
 	if diff < 0: diff = 0
 	if FIGHT_VERBOSE: log(p1,p2,"Checking if attack misses...")
 	seed = int(round(time.time()))
 	if choice == 1:
 		base = 5 - diff
+		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
+		if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
+		if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
+		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
+                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
+                if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
+		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
+                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
+                if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
+		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
+                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100

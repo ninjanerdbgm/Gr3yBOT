@@ -436,7 +436,7 @@ def main(joined):
 		action = 'none'
 
 		try:
-			raw = irc.recv(1024)
+			raw = irc.recv(2048)
 			# Reply to PING
 			if raw[0:4] == 'PING':
 				try:
@@ -995,8 +995,7 @@ def main(joined):
 									except:
 										pass
 								send("more info: {0}".format(calcURL),getChannel(data))
-							
-			
+
 						# PODCAST INFO
 						if (info[0].lower() in podcast_keywords):
 							if special == 0: send("ok one sec...",getChannel(data))
@@ -1550,7 +1549,7 @@ def main(joined):
 							#--
 							# This is the chat fight subroutine.
 							#--
-							if SequenceMatcher(None, getChannel(data).lower(), fightchan.lower()).ratio() < 0.92:
+							if (SequenceMatcher(None, getChannel(data).lower(), fightchan.lower()).ratio() < 0.92) and special == 0:
 								send("no we have a fight fightchan for this: /join {0}".format(fightchan),getChannel(data))
 								continue
 							channel = fightchan
@@ -1684,6 +1683,110 @@ def main(joined):
 									privsend("%fight help stats - get more info on what each stat does",name)
 									continue
 
+							elif act[0].lower() == "inventory":
+								try:
+									checkPerson = act[1]
+								except:
+									checkPerson = getNick(data)
+								person = getNick(data)
+								inventory = getInventory(checkPerson)
+								if inventory == False: 
+									fightsend("{} pockets are empty. maybe fighting more will fill them up".format(checkPerson + '\'s' if checkPerson != person else "your")) if special == 0 else privsend("{} pockets are empty. maybe fighting more will fill them up".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
+									continue
+								if special == 0: fightsend("k check your pms")
+								equippedItems = inventory[1]
+								unequippedItems = inventory[2]
+								privsend("{} equipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
+								if len(equippedItems) == 0: privsend("none",person)
+								else:
+									for thing in equippedItems.split(','):
+										if len(thing.rstrip()) == 4:
+											item = getItemByItemNo(thing)
+											privsend("{0} (atk: {1}, def: {2}, magatk: {3}, magdef: {4}, hp gain: {5}). {6}. Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
+								privsend("{} unequipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
+								if len(unequippedItems) == 0: privsend("none",person)
+								for thing in unequippedItems.split(','):
+									if len(thing.rstrip()) == 4:
+										item = getItemByItemNo(thing.rstrip())
+										privsend("{0} (atk: {1}, def: {2}, magatk: {3}, magdef: {4}, hp gain: {5}). {6}. Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
+								if checkPerson == person: privsend("To (un)equip an item, type %fight (un)equip <ItemNumber> so like: %fight equip 0669 or %fight unequip 2129",person)
+
+							elif act[0].lower() == "equip":
+								person = getNick(data)
+								fighting = 0
+								with open('fightsongoing', 'r') as f:
+                                                                        for line in f:
+                                                                                initiator = line.split('[-]')[0]
+                                                                                who = line.split('[-]')[1]
+                                                                                accepted = line.split('[-]')[2]
+                                                                                if person.lower() == initiator.lower():
+                                                                                        if int(accepted) == 1:
+                                                                                                fightsend("you cant change equipment when youre fighting".format(who))
+												fighting = 1
+                                                                                                break
+										if person.lower() == who.lower():
+                                                                                        if int(accepted) == 1:
+                                                                                                fightsend("you cant change equipment when youre fighting".format(initiator))
+												fighting = 1
+                                                                                                break
+								f.close()
+								if fighting == 1: continue
+								try:
+									itemNum = act[1]
+								except:
+									fightsend("what item do you want to equip.  do %fight inventory to see your inventory") if special == 0 else privsend("what item do you wanna equip.  do %fight inventory to see your inventory",person)
+									continue
+								out = equipItem(person,itemNum)
+								if special == 0:
+									if out == 0: fightsend("you don't have an inventory yet.  fight more")
+									if out == 1: fightsend("ok now youre so super strong")
+									if out == 2: fightsend("maybe you should acquire that item first")
+									if out == 3: fightsend("you already have equipment of that kind equipped.  unequip the old stuff first.")
+									if out == 4: fightsend("you already have 2 accessories equipped.  unequip one of them first")
+								if special == 1:
+									if out == 0: privsend("you don't have an inventory yet.  fight more",person)
+									if out == 1: privsend("ok now youre so super strong",person)
+									if out == 2: privsend("maybe you should acquire that item first",person)
+									if out == 3: privsend("you already have equipment of that kind equipped.  unequip the old stuff first.",person)
+									if out == 4: privsend("you already have 2 accessories equipped.  unequip one of them first",person)
+								continue
+
+							elif act[0].lower() == "unequip":
+                                                                person = getNick(data)
+								fighting = 0
+								with open('fightsongoing', 'r') as f:
+                                                                        for line in f:
+                                                                                initiator = line.split('[-]')[0]
+                                                                                who = line.split('[-]')[1]
+                                                                                accepted = line.split('[-]')[2]
+                                                                                if person.lower() == initiator.lower():
+                                                                                        if int(accepted) == 1:
+                                                                                                fightsend("you cant change equipment when youre fighting".format(who))
+												fighting = 1
+                                                                                                continue
+                                                                                if person.lower() == who.lower():
+                                                                                        if int(accepted) == 1:
+                                                                                                fightsend("you cant change equipment when youre fighting".format(initiator))
+												fighting = 1
+                                                                                                continue
+                                                                f.close()
+								if fighting == 1: continue
+                                                                try:
+                                                                        itemNum = act[1]
+                                                                except:
+                                                                        fightsend("what item do you want to unequip.  do %fight inventory to see your inventory") if special == 0 else privsend("what item do you wanna unequip.  do %fight inventory to see your inventory",person)
+                                                                        continue
+                                                                out = unequipItem(person,itemNum)
+                                                                if special == 0:
+                                                                        if out == 0: fightsend("you don't have an inventory yet.  fight more")
+                                                                        if out == 1: fightsend("ok now youre so super weak")
+                                                                        if out == 2: fightsend("you dont even know what that item is")
+                                                                if special == 1:
+                                                                        if out == 0: privsend("you don't have an inventory yet.  fight more",person)
+                                                                        if out == 1: privsend("ok now youre so super weak",person)
+                                                                        if out == 2: privsend("you dont even know what that item is",person)
+                                                                continue
+								
 
 							elif act[0].lower() == "challenge":
 								#--
@@ -1908,7 +2011,6 @@ def main(joined):
 										who = line.split('[-]')[3]
 										accepted = line.split('[-]')[2]
 										stopper = line.split('[-]')[6].strip('\r\n')
-										print "STOPPER: {0}".format(stopper)
 										if getNick(data).lower() == initiator.lower(): person = opponent
 										if getNick(data).lower() == opponent.lower(): person = initiator
 										if (initiator.lower() == getNick(data).lower() or opponent.lower() == getNick(data).lower()) and int(accepted) == 0:
@@ -2095,6 +2197,25 @@ def main(joined):
 									setFighterStats(fname=defender,atksincelvl=zero,satksincelvl=zero,fatksincelvl=zero,magatksincelvl=zero,grdsincelvl=zero,mgrdsincelvl=zero)
 								if fighting == 1:
 									updateFight(attacker)
+								else: # Check if someone gets an item
+									itemPerson = 0
+									seed = ((time.time() + xOrShift()) % 100) + 1
+									if seed <= 20: itemPerson = attacker
+									if seed >= 80: itemPerson = defender
+									if itemPerson != 0:
+			                                                        itemNo = getRandomItem()
+			                                                	if itemNo == False: # still a chance to not get an item
+				                                                        continue
+			                                                        itemNo = itemNo[random.randint(0,len(itemNo)-1)]
+			                                                        item = getItemByItemNo(itemNo)
+			                                                        if item == False: # STILL a chance to not get an item
+			                                                                continue
+										if LOGLEVEL >= 1: log("{0} got an item from the fight! They got: {1}".format(itemPerson,item[0]))
+			                                                        privsend("After the fight, you found a treasure chest.",itemPerson)
+			                                                        privsend("In the chest was: {0} (Atk: {1}, Def: {2}, MagAtk: {3}, MagDef: {4}, HP: {5}). {6}.  Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],itemNo),itemPerson)
+			                                                        updateInventory(itemPerson,itemNo)
+			                                                        privsend("It's been added to your inventory.  To see your inventory, type %fight inventory",itemPerson)
+										privsend("To equip it now, type %fight equip {}".format(itemNo))
 							else:
 								fightsend("maybe you need to look at %fight help.  or learn how to read.  one of the two.")
 							
