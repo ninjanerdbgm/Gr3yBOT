@@ -312,22 +312,28 @@ def equipItem(person,itemno):
 		for line in lines:
 			if line.split('/')[0].lower() == person.lower():
 				if itemno[0:2] != "04":
-					if itemno[0:2] in line.split('/')[1]:
-						updated = 3
-						f.write(line)
-						continue
+					for itemId in line.split('/')[1].split(','):
+						if itemno[0:2] == itemId[0:2]:
+							updated = 3
+							f.write(line)
+							continue
 				else:
-					if line.split('/')[1].count(itemno[0:2]) == 2:
-						updated = 4
-						f.write(line)
-						continue
+					accCount = 0
+					for itemId in line.split('/')[1].split(','):
+						if itemno[0:1] == itemId[0:1]:
+							accCount += 1
+						if accCount == 2:
+							updated = 4
+							f.write(line)
+							continue
 				if itemno in line.split('/')[2]:
-					equippedItems = line.split('/')[1]
-					unequippedItems = line.split('/')[2]
-					f.write('{0}/{1},{2}/{3}\r\n'.format(person,equippedItems,itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n')))
-					itemStats = getItemByItemNo(itemno)
-					setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
-					updated = 1
+					if updated == 0:
+						equippedItems = line.split('/')[1]
+						unequippedItems = line.split('/')[2]
+						f.write('{0}/{1},{2}/{3}\r\n'.format(person,equippedItems,itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n')))
+						itemStats = getItemByItemNo(itemno)
+						setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
+						updated = 1
 				else: 
 					updated = 2
 					f.write(line)
