@@ -1,0 +1,104 @@
+# Layout of this file:
+# ItemNumber - Item Name/Chance to Get/Atk/Def/MagAtk/MagDef/HP/Description
+
+# Armor
+0101 - Bandages/90/0/1/0/1/0/Common Item
+0102 - Cloth Armor/90/0/1/0/2/0/Common Item
+0103 - Leather Armor/80/0/3/0/1/0/Common Item
+0104 - Leather Armor +1/50/0/4/0/1/0/Uncommon Item
+0105 - Polished Leather Armor/35/0/4/0/3/0/Better Magic Def, Rare Item
+0106 - Studded Leather Armor/75/0/6/0/1/0/Common Item
+0107 - Studded Leather Armor +1/50/0/7/0/1/0/Uncommon Item
+0108 - Polished Studded Leather Armor/35/0/7/0/4/0/Better Magic Def, Rare Item
+0109 - Leather Armor of the Wind/20/0/4/0/4/0/Evasion +2, Rare Item
+0110 - Hide Armor/65/0/4/0/4/0/Common Item
+0111 - Hide Armor +1/35/0/5/0/5/0/Uncommon Item
+0112 - Absorbing Hide Armor/20/0/5/0/5/15/HP +15, Rare Item
+0113 - Chainmail/65/0/8/0/3/0/Common Item
+0114 - Chainmail +1/35/0/9/0/3/0/Uncommon Item
+0115 - Polished Chainmail/30/0/9/0/4/0/Uncommon Item
+0116 - Mithril Chainmail/10/0/15/0/15/20/Very Rare Item
+0117 - Drizzt's Mithril/5/0/25/0/25/20/Legendary Item
+0118 - Plate Mail/60/0/10/0/0/0/Uncommon Item
+0119 - Plate Mail +1/40/0/11/0/0/Uncommon Item
+0120 - Full Plate Mail/30/0/13/0/1/0/Rare Item
+0121 - Polished Plate Mail/25/0/11/0/3/0/Better Magic Def, Rare Item
+0122 - Gilded Mail/8/5/20/5/20/15/Legendary Item
+0123 - Better Gilded Mail/3/10/30/10/30/30/Artefact. Part of the bgm set.
+# Weapons
+0201 - Dagger/95/3/0/0/0/0/Dagger, Common Item
+0202 - Dagger +1/78/4/0/0/0/0/Dagger, Common Item
+0203 - Ixil's Spike/55/6/2/0/0/0/Dagger, Uncommon Item
+0204 - Dagger of the Star/45/5/2/5/2/0/Dagger, Uncommon Item
+0205 - Short Sword/85/5/0/0/0/0/Short Sword, Common Item
+0206 - Short Sword +1/60/6/0/0/0/0/Short Sword, Uncommon Item
+0207 - Lifebane/25/10/0/0/0/0/Short Sword, Rare Item
+0208 - Entropic Decay/15/15/0/5/0/0/Short Sword, Legendary Item
+0209 - Bore. Gore. Murder./3/30/10/30/10/0/Artefact.  Part of the bgm set.
+0210 - Rapier/75/9/0/0/0/0/Long Sword, Common Item
+0211 - Long Sword +1/55/10/0/0/0/0/Long Sword, Uncommon Item
+0212 - Adjatha the Drinker/35/12/0/5/0/10/Long Sword, HP+10, Rare Item
+0213 - The Answer/25/16/0/5/0/0/Long Sword, Rare Item
+0214 - Reaver/70/12/0/0/0/0/Two-Handed Sword, Common Item
+0215 - Warblade/60/14/0/0/0/0/Two-Handed Sword, Uncommon Item
+0216 - Gram, the Sword of Grief/35/23/-2/-2/-2/0/Two-Handed Sword, Rare Item
+0217 - Lilarcor/20/20/0/0/0/0/Two-Handed Sword, Rare Item
+0218 - Carsomyr/10/25/0/0/0/0/Two-Handed Sword, Legendary Item
+0219 - Club/95/5/0/0/0/0/Club, Common Item
+0220 - Club +1/80/6/0/0/0/0/Club, Common Item
+0221 - Club +2/70/7/0/0/0/0/Club, Common Item
+0222 - The Root of the Problem/20/18/10/0/0/0/Club, Rare Item
+0223 - Halberd/65/8/5/0/0/0/Halberd, Common Item
+0224 - Halberd +1/45/9/6/0/0/0/Halberd, Uncommon Item
+0225 - Duskpike/30/10/5/5/5/0/Halberd, Rare Item
+0226 - Ravager/20/12/6/8/5/0/Halberd, Rare Item
+0227 - Flail/80/6/1/0/0/0/Flail, Common Item
+0228 - Morning Star/70/6/0/0/2/0/Flail, Common Item
+0229 - Garrett's Blackjack/45/10/5/0/0/0/Flail, Rare Item
+0230 - Flail of the Ages +4/8/15/15/2/5/0/Flail, Legendary Item
+0231 - Quarterstaff/95/1/1/3/1/0/Quarterstaff, Common Item
+0232 - Quarterstaff +1/85/1/1/4/1/0/Quarterstaff, Common Item
+0233 - Quarterstaff +2/75/1/1/5/2/0/Quarterstaff, Common Item
+0234 - Serpent Shaft/70/2/1/6/1/0/Quarterstaff, Common Item
+0235 - Staff of the Forest/60/2/1/7/3/0/Quarterstaff, Uncommon Item
+0236 - Rod of Crystal Stars/30/2/1/15/3/0/Quarterstaff, Rare Item
+0237 - Staff of Rym/45/1/1/10/2/0/Quarterstaff, Rare Item
+0238 - Staff of Encircling Lights/25/3/6/12/10/0/Quarterstaff, Rare Item
+0239 - Staff of the Grey Wizard/15/4/4/15/8/0/Quarterstaff, Legendary Item
+0240 - Staff of the White Wizard/10/6/6/20/10/0/Quarterstaff, Legendary Item
+# Boots
+0301 - Boots of Speed/35/0/0/0/0/0/Rare Item, Evasion +2
+0302 - Boots of Elvenkind/50/0/6/0/6/0/Uncommon Item
+0303 - Boots of Vitality/40/0/0/0/0/20/Rare Item
+0304 - Boots of Phasing/20/0/0/0/0/0/Rare Item, Evasion +5
+0305 - Issac's Boot/10/10/10/0/0/0/Legendary Item
+0306 - Boots of Guiding Menace/3/10/10/10/10/20/Artefact. Part of the bgm set.
+# Accessories
+0401 - Cloak of Protection/80/0/2/0/2/0/Cloak, Common Item
+0402 - Cloak of Protection +1/70/0/3/0/3/0/Cloak, Common Item
+0403 - Cloak of Protection +2/60/0/4/0/4/0/Cloak, Uncommon Item
+0404 - Cloak of Shielding/50/0/3/0/4/10/Cloak, Uncommon Item
+0405 - Mirrorwrap/35/0/3/0/10/0/Cloak, Rare Item
+0406 - Bracers of Sure Aim/45/0/0/0/0/0/Bracers, Rare Item, Increases Chance to Hit with Melee Attacks
+0407 - Bracers of Hill Giant Strength/40/8/0/0/0/0/Bracers, Rare Item
+0408 - Bracers of Frost Giant Strength/25/12/0/0/0/0/Bracers, Rare Item
+0409 - Wizard's Cuffs/35/0/0/6/3/0/Bracers, Rare Item
+0410 - Robe of Casting/45/0/0/5/2/0/Robe, Rare Item
+0411 - Robe of the Good Archmagi/30/0/0/6/10/0/Robe, Rare Item
+0412 - Robe of the Evil Archmagi/30/0/0/10/6/0/Robe, Rare Item
+0413 - Robe of the Mountain Hermit/10/0/0/15/15/15/Robe, Legendary Item
+0414 - Amulet of the Troll/70/5/0/0/-2/0/Amulet, Common Item
+0415 - Amulet of the Frost Troll/45/10/0/0/-3/0/Amulet, Rare Item
+0416 - Metamagic Pendant/50/0/0/5/5/0/Amulet, Rare Item
+0417 - Aura of Vitality/30/0/5/0/5/25/Amulet, Rare Item
+0418 - Periapt of Proof/45/6/0/6/0/10/Amulet, Rare Item
+0419 - Squire's Pendant/90/2/2/2/2/5/Amulet, Common Item
+0420 - Knight's Pendant/80/3/3/3/3/7/Amulet, Common Item
+0421 - Lieutenant's Pendant/70/4/4/4/4/9/Amulet, Common Item
+0422 - Captain's Pendant/60/5/5/5/5/11/Amulet, Uncommon Item
+0423 - Champion's Pendant/50/6/6/6/6/13/Amulet, Uncommon Item
+0424 - General's Pendant/40/7/7/7/7/15/Amulet, Rare Item
+0425 - Commander's Pendant/30/8/8/8/8/17/Amulet, Rare Item
+0426 - Marshal's Pendant/20/9/9/9/9/19/Amulet, Legendary Item
+0427 - King's Pendant/10/10/10/10/10/21/Amulet, Legendary Item
+0428 - Brooch of Great Misdeeds/3/15/15/15/15/25/Artefact. Part of the bgm set.
