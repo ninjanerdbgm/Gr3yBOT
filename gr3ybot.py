@@ -1704,11 +1704,11 @@ def main(joined):
 											item = getItemByItemNo(thing)
 											privsend("--== {0} ==-- (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
 								privsend("{} unequipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
-								if len(unequippedItems) == 0: privsend("none",person)
+								if len(unequippedItems.rstrip()) == 0: privsend("none",person)
 								for thing in unequippedItems.split(','):
 									if len(thing.rstrip()) == 4:
 										item = getItemByItemNo(thing.rstrip())
-										privsend("{0} (atk: {1}, def: {2}, magatk: {3}, magdef: {4}, hp gain: {5}). {6}. Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
+										privsend("--== {0} ==-- (atk: {1} || def: {2} || magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],thing),person)
 								if checkPerson == person: privsend("To (un)equip an item, type %fight (un)equip <ItemNumber> so like: %fight equip 0669 or %fight unequip 2129",person)
 
 							elif act[0].lower() == "equip":
