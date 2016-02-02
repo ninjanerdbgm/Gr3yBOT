@@ -543,6 +543,16 @@ def levelUp(person):
 	p1 = getFighterStats(person)
 	currentxp = int(p1[7])
 	currentlvl = p1[1]
+	with open('inventories','r') as f:
+                updated=0
+                lines = f.readlines()
+                f.seek(0)
+                for line in lines:
+                        if line.split('/')[0].lower() == person.lower():
+                        	for itemId in line.split('/')[1].split(','):
+					if len(itemId.rstrip()) == 4:
+	                                	unequipItem(person,itemId)
+			else: continue
 	setFighterStats(fname=person,lvl=int(currentlvl)+1,hp=getMaxHPByLevel(int(currentlvl)+1))
 	results = []
 	if int(p1[7]) > 0: return False # This should never happen, but covering all the bases here.
@@ -592,6 +602,16 @@ def levelUp(person):
 				if FIGHT_VERBOSE: log("Increasing Magic Defense by {0}".format(newgrd))
 	                        results.append("you guarded against magic a total of {0} times, resulting in an increase in your mdef stat from {1} to {2}".format(int(stats.get('mgrd')),int(p1[5]),int(p1[5]) + newgrd))
 	newxp = int(round((((float(currentlvl) + 1) * 10) * 1.5) + (float(currentlvl) * (float(currentlvl)-1)) + 1))
+	with open('inventories','r') as f:
+                updated=0
+                lines = f.readlines()
+                f.seek(0)
+                for line in lines:
+                        if line.split('/')[0].lower() == person.lower():
+                                for itemId in line.split('/')[2].split(','):
+					if len(itemId.rstrip()) == 4:
+	                                        equipItem(person,itemId.rstrip())
+                        else: continue
 	if FIGHT_VERBOSE: 
 		log("XP to next level = round((player level * 10) * 1.5) + (player level - 1 * player level - 2) + 1")
 		log("{0} * 1.5 + ({1} * {2}) + 1 = {3}".format((int(currentlvl)+1)*10,int(currentlvl),int(currentlvl)-1,newxp))
