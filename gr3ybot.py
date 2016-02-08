@@ -382,7 +382,7 @@ def searchAndReplace(u, s, r, chan):
 	q = con.db.cursor()
 	try:
 		q.execute("""
-			SELECT * FROM Log WHERE user = ? AND text REGEXP ? ORDER BY id DESC LIMIT 2""", (u, s))
+			SELECT * FROM Log WHERE user = ? AND text REGEXP ? ORDER BY id DESC LIMIT 1""", (u, s))
 		for row in q.fetchall():
 			send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
 		if LOGLEVEL >= 1: log("Made a search and replace request")
@@ -450,7 +450,7 @@ def checkReminders(chan=channel):
 	#--
 	q = con.db.cursor()
 	q.execute("""
-		SELECT * FROM Reminders WHERE dateTime < ? """, (time.time(),))
+		SELECT * FROM Reminders WHERE atTime < ? """, (time.time(),))
 	for row in q:
 		send("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),chan)
                 privsend("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),row[1])
