@@ -181,7 +181,7 @@ def addToSearchDb(nick,msg):
 				INSERT INTO Log (dateTime, user, text) VALUES (?, ?, ?) """, (time.time(), nick, msg))
 		con.db.commit()
 	except Exception as e:
-		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last five user messages: {}".format(str(e)))
+		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last {0} user messages: {1}".format(MSG_HISTORY, str(e))
 		q.rollback()
 
 def admins(nick, host):
