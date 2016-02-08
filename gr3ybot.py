@@ -106,7 +106,7 @@ def connect():
 	irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
 	print "Connecting to {0}:{1}".format(server,port)
 	irc.connect((server,port))
-	irc.setblocking(False)
+	#irc.setblocking(False)
 	#irc.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
 
 	if len(channelpw) > 1:
@@ -480,7 +480,7 @@ def main(joined):
 		dataReady = select.select([irc], [], [], 10)
 		if dataReady[0]:
 			try:
-				raw = irc.recv(2048)
+				raw = irc.recv(1024)
 				# Reply to PING
 				if raw[0:4] == 'PING':
 					try:
@@ -514,7 +514,7 @@ def main(joined):
 			irc.close()
 			connect()
 
-		for data in f:	
+		for data in f:
 			if LOGLEVEL == 3: 
 				log(raw)
 			elif LOGLEVEL >= 2:
@@ -1394,7 +1394,7 @@ def main(joined):
 							timefloat = time.mktime(reminddate[0])
 							if timefloat <= time.time():
 								if special == 0: send("ok let me just go hop in my time machine",getChannel(data))
-								else: usernick = getNick(data); privsend("ok let me just go hop in my time machine",usernick); print timefloat; print time.time();
+								else: usernick = getNick(data); privsend("ok let me just go hop in my time machine",usernick);
 								continue
 							try:
 								reminddate = checkdate
@@ -1752,9 +1752,7 @@ def main(joined):
 									fightsend("what item do you want to equip.  do %fight inventory to see your inventory") if special == 0 else privsend("what item do you wanna equip.  do %fight inventory to see your inventory",person)
 									continue
 								out = equipItem(person,itemNum)
-								print out
 								item = getItemByItemNo(itemNum)
-								print item
 								if special == 0:
 									if out == 2: fightsend("um i dont think you have that item")
 									if out == 1: fightsend("ok your {} is equipped".format(item[1]))
@@ -2556,6 +2554,8 @@ def main(joined):
 						send("d-k.  donkey kong.",getChannel(data))
 						time.sleep(.5)
 						send("d-k.  DONKEYKONGISHERE.",getChannel(data))
+
+			f.pop() # Flush the data.
 		
 #-- Make sure this is the main script
 if __name__ == '__main__':
