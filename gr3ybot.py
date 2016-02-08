@@ -430,7 +430,6 @@ def main(joined):
 	threshold = 5 * 60
 	lastPing = time.time()
 	readBuffer = ""
-	pingActions('#BETABETA')
 	while True:
 		special = 0
 		action = 'none'
