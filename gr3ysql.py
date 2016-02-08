@@ -24,8 +24,10 @@ class Gr3ySQL(object):
 			create.execute("""
 					CREATE TABLE IF NOT EXISTS
 						Log (
-							dateTime INTEGER PRIMARY KEY,
-							text TEXT COLLATE RTRIM
+							id INTEGER PRIMARY KEY AUTOINCREMENT,
+							dateTime INTEGER,
+							user VARCHAR(12) COLLATE NOCASE,
+							text TEXT COLLATE NOCASE
 						)
 			""")
 			
