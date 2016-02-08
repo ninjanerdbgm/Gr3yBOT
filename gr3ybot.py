@@ -168,7 +168,7 @@ def addToSearchDb(nick,msg):
 		q.execute("""
 			SELECT * FROM Log WHERE user = ? """, (nick,))
 		count = len(q.fetchall())
-		if not count or count is None or count < 5:
+		if not count or count is None or count < MSG_HISTORY:
 			q.execute("""
 				INSERT INTO Log (dateTime, user, text) VALUES (?, ?, ?) """, (time.time(), nick, msg))
 		if count == MSG_HISTORY:
@@ -181,7 +181,7 @@ def addToSearchDb(nick,msg):
 				INSERT INTO Log (dateTime, user, text) VALUES (?, ?, ?) """, (time.time(), nick, msg))
 		con.db.commit()
 	except Exception as e:
-		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last {0} user messages: {1}".format(MSG_HISTORY, str(e))
+		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last {0} user messages: {1}".format(MSG_HISTORY, str(e)))
 		q.rollback()
 
 def admins(nick, host):
@@ -371,13 +371,22 @@ def rline(f):
 		line = randline
 	return line
 
+def regexp(search, string):
+	try:
+		if re.search(r"\b{}(\S?)\b".format(search), string, re.IGNORECASE):
+			return 1
+	except Exception as e:
+		return 0
+
 def searchAndReplace(u, s, r, chan):
 	q = con.db.cursor()
 	try:
 		q.execute("""
-			SELECT * FROM Log WHERE user = ? AND text LIKE ? ORDER BY id DESC""", (u, '%' + s + '%'))
-		row = q.fetchone()
-		send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
+			SELECT * FROM Log WHERE user = ? AND text REGEXP ? ORDER BY id DESC LIMIT 1""", (u, s))
+		row = q.fetchall()
+		if len(row) == 1:
+			row = row[0]
+			send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
 		if LOGLEVEL >= 1: log("Made a search and replace request")
 	except Exception as e:
 		if LOGLEVEL >= 1: log("ERROR: Unable to perform search and replace: {}".format(str(e)))
@@ -459,6 +468,7 @@ def checkReminders(chan=channel):
 #-- Main Function
 def main(joined):
 	connect()
+	con.db.create_function("regexp", 2, regexp)
 	disconnected = 0
 	joined = False
 	threshold = 5 * 60
