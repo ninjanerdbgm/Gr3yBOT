@@ -20,7 +20,6 @@ class Gr3ySQL(object):
 			# Create the tables if they don't already exist.
 
 			# Logging
-			# Currently not used.
 			create.execute("""
 					CREATE TABLE IF NOT EXISTS
 						Log (
