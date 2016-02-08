@@ -39,6 +39,7 @@ import struct
 from difflib import SequenceMatcher
 from bottube import *
 import socket
+import select
 import string
 from urbandict import *
 import sys
@@ -103,7 +104,6 @@ matchbot = botname.lower()
 def connect():
 	global irc
 	irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
-	irc.settimeout(10)
 	print "Connecting to {0}:{1}".format(server,port)
 	irc.connect((server,port))
 	irc.setblocking(False)
@@ -382,10 +382,8 @@ def searchAndReplace(u, s, r, chan):
 	q = con.db.cursor()
 	try:
 		q.execute("""
-			SELECT * FROM Log WHERE user = ? AND text REGEXP ? ORDER BY id DESC LIMIT 1""", (u, s))
-		row = q.fetchall()
-		if len(row) == 1:
-			row = row[0]
+			SELECT * FROM Log WHERE user = ? AND text REGEXP ? ORDER BY id DESC LIMIT 2""", (u, s))
+		for row in q.fetchall():
 			send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
 		if LOGLEVEL >= 1: log("Made a search and replace request")
 	except Exception as e:
@@ -452,7 +450,7 @@ def checkReminders(chan=channel):
 	#--
 	q = con.db.cursor()
 	q.execute("""
-		SELECT * FROM Reminders WHERE atTime < ? """, (time.time(),))
+		SELECT * FROM Reminders WHERE dateTime < ? """, (time.time(),))
 	for row in q:
 		send("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),chan)
                 privsend("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),row[1])
@@ -477,30 +475,28 @@ def main(joined):
 	while True:
 		special = 0
 		action = 'none'
-
-		try:
-			raw = irc.recv(2048)
-			# Reply to PING
-			if raw[0:4] == 'PING':
-				try:
-					lastPing = time.time()
-					tellinghistory = 0
-					time.sleep(1)
-					irc.send('PONG ' + raw.split()[1] + '\r\n')
-					if LOGLEVEL >= 1: log("Sent a ping response.")
-					pingActions(getChannel(raw))
-				except Exception as e:
-					if LOGLEVEL >= 1: log("Couldn't send PONG response: {}".format(str(e)))
-                                	continue
-
-			readBuffer = readBuffer + raw
-			f = readBuffer.split('\n')
-			readBuffer = f.pop()
-		except socket.error as e:
-			time.sleep(0.5)
-			continue
-		except:
-			continue
+		dataReady = select.select([irc], [], [], 10)
+		if dataReady[0]:
+			try:
+				raw = irc.recv(2048)
+				# Reply to PING
+				if raw[0:4] == 'PING':
+					try:
+						lastPing = time.time()
+						tellinghistory = 0
+						time.sleep(1)
+						irc.send('PONG ' + raw.split()[1] + '\r\n')
+						if LOGLEVEL >= 1: log("Sent a ping response.")
+						pingActions(getChannel(raw))
+					except Exception as e:
+						if LOGLEVEL >= 1: log("Couldn't send PONG response: {}".format(str(e)))
+	                                	continue
+	
+				readBuffer = readBuffer + raw
+				f = readBuffer.split('\n')
+				readBuffer = f.pop()
+			except:
+				continue
 
 		if (time.time() - lastPing) > threshold:
 			if LOGLEVEL >= 1: 
