@@ -1128,11 +1128,11 @@ def main(joined):
 							if tellnick.lower() == botname.lower():
 								send("why would i want to leave myself a memo tho",getChannel(data))
 								continue
-							#if tellnick.lower() == fromnick.lower():
-							#	send("ok sure thing.",getChannel(data))
-							#	time.sleep(3)
-							#	send("hey {0}, {1} says youre an idiot.".format(fromnick,botname.lower()),getChannel(data))
-							#	continue
+							if tellnick.lower() == fromnick.lower():
+								send("ok sure thing.",getChannel(data))
+								time.sleep(3)
+								send("hey {0}, {1} says youre an idiot.".format(fromnick,botname.lower()),getChannel(data))
+								continue
 							try:
 								message = " ".join(message[1:])
 								message = message.translate(None, "\t\r\n")
