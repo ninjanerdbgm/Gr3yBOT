@@ -1100,23 +1100,6 @@ def main(joined):
 								privsend("<timeframe> - make it plain english. examples: %remindme in five minutes, %remindme on the second tuesday of march, %remindme 9/1/16, etc",name)
 								privsend("<message> - message is required, and must be separated from the <timeframe> by a single dash (-).",name)
 
-						#ITEMITEM
-						if info[0].lower() == 'test':
-							item = getRandomItem()
-							if item == False: continue
-							itemPerson = getNick(data)
-							privsend("After the fight, you found a treasure chest.",itemPerson)
-                                                        privsend("In the chest was: --== {0} ==-- (Atk: {1} || Def: {2} || MagAtk: {3} || MagDef: {4} || HP Gain: {5}). --== {6}. ==--  Item number: {7}".format(item[1],item[3],item[4],item[5],item[6],item[7],item[8],item[0]),itemPerson)
-                                                        status = updateInventory(itemPerson,item[0])
-							if status == "Full":
-								privsend("your bags are full. equip or drop some stuff. to drop an item in your inventory, type %fight drop <itemnumber>.  to drop this item, just type %fight drop",itemPerson)
-								privsend("just to let you know, if you pick up another item before deciding on one to drop, it will take the place of the {} you just got.".format(item[1]),itemPerson)
-								privsend("to see your inventory, type %fight inventory",itemPerson)
-							else:
-	                                                        privsend("It's been added to your inventory.  To see your inventory, type %fight inventory",itemPerson)
-	                                                        privsend("To equip it now, type %fight equip {}".format(item[0]),itemPerson)
-							
-		
 						# OVERLORD
 						if (info[0].lower() in overlord_keywords):
 							sender = getNick(data)
