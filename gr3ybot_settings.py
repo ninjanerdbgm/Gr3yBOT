@@ -102,6 +102,7 @@ URBANDICT_ENABLED = True
 WIKIPEDIA_ENABLED = True
 WOLFRAM_ENABLED = True
 QR_ENABLED = True
+SLACK_ENABLED = True
 #--
 
 # Fight Settings:
@@ -293,6 +294,14 @@ if CONFIGURED:
                 else:
                         print("Script misconfiguration.  Exiting now...")
                         sys.exit()
+	if SLACK_ENABLED and len(SLACK_API_TOKEN) < 5:
+                print("You've enabled Slack integration, but didn't supply a valid Slack API dev key.")
+                print("Do you want to disable Slack integration?")
+                if raw_input().lower() in affirmative:
+                        SLACK_ENABLED = False
+                else:
+                        print("Script misconfiguration.  Exiting now...")
+                        sys.exit()
 	if TWITTER_ENABLED and (len(TWIT_CONSUMER_KEY) < 5 or len(TWIT_ACCESS_KEY) < 5 or len(TWIT_CONSUMER_SECRET) < 5 or len(TWIT_ACCESS_SECRET) < 5):
 		print("You've enabled Twitter functions, but didn't supply valid Twitter API keys.")
                 print("Do you want to disable Twitter functionality?")
@@ -329,6 +338,7 @@ if CONFIGURED:
 	print("Current settings:")
 	print("Fight History: {0}\nYouTube Links: {1}\nTwitter functions: {2}\nNews Links: {3}".format(FIGHT_HISTORY,YOUTUBE_LINKS,TWITTER_ENABLED,NEWS_LINKS))
 	print("Yelp: {0}\nPing: {1}\nWolfram Alpha: {4}\nUrban Dictionary: {2}\nWikipedia: {3}".format(YELP_ENABLED,PING_ENABLED,URBANDICT_ENABLED,WIKIPEDIA_ENABLED,WOLFRAM_ENABLED))
+	print("Slack integration: {0}".format(SLACK_ENABLED))
 	if raw_input("\nIs this look okay? (y/n): ").lower() in affirmative:
                 pass
         else:
