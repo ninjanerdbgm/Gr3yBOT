@@ -9,7 +9,9 @@
 # function. If you end up using these, please give me credit
 # somewhere in your comments.  
 
-from gr3ybot_settings import FIGHT_VERBOSE, FIGHTLOG, LOGFILE, LOCALTZ
+from gr3ybot_settings import botname, FIGHT_VERBOSE, FIGHTLOG, LOGFILE, LOCALTZ
+from gr3ysql import Gr3ySQL
+import sqlite3
 import random
 import sys
 from pytz import timezone
@@ -20,6 +22,9 @@ import time
 import datetime
 from collections import OrderedDict
 import math
+
+global sql
+sql = Gr3ySQL()
 
 #-- Exit this program if called by itself
 if __name__ == "__main__":
@@ -261,137 +266,332 @@ def critChance(p1,p2):
 
 def getRandomItem():
 	seed = int(time.time()  * os.getpgid(0)) + xOrShift() # Set the seed for the itemlist
-	randomItems = []
 	itemCat = (seed % 4) + 1 # Get the item category
 	itemChance = ((seed + (xOrShift() * time.time()) + 1) % 100)
-	with open('equipmentlist','r') as f:
-		lines = f.readlines()
-		f.seek(0)
-		for line in lines:
-			if line.startswith('0' + str(itemCat)):
-				itemNum = line.split(' - ')[0]
-				lineParts = line.split(' - ')[1].split('/')
-				if int(lineParts[1]) > itemChance:
-					randomItems.append(itemNum)
-	f.close()
-	if len(randomItems) == 0: return False
-	return randomItems
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT itemNo, itemName, itemChance, atk, grd, mag, mdef, hp, itemDesc FROM EquipmentList WHERE itemNo LIKE ? AND itemChance > ? ORDER BY RANDOM() LIMIT 1 """, ('0'+str(itemCat)+'__',itemChance))
+		randItem = q.fetchone()
+		if randItem is None: return False
+		return randItem
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't generate random item: {}".format(str(e)))
+		return False
 
 def getItemByItemNo(itemno):
-	lineParts = []
-	with open('equipmentlist','r') as f:
-		lines = f.readlines()
-		f.seek(0)
-		for line in lines:
-			if line.startswith(itemno):
-				lineParts = line.split(' - ')[1].split('/')
-	f.close()
-	if len(lineParts) == 0: return False
-	return lineParts
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT itemNo, itemName, itemChance, atk, grd, mag, mdef, hp, itemDesc FROM EquipmentList WHERE itemNo LIKE ? """, (itemno,))
+		lineParts = q.fetchone()
+		if lineParts is None: return False
+		return lineParts
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't get item information: {}".format(str(e)))
+		return False
 
 def updateInventory(person,itemno):
-	with open('inventories','r+') as f:
-		wroteline=0
-		lines = f.readlines()
-		f.seek(0)
-		for line in lines:
-			if line.split('/')[0].lower() == person.lower():
-				line = line.strip('\r\n') + ',{}\r\n'.format(itemno)
-				wroteline=1
-			f.write(line)
-		if wroteline == 0:
-			f.write('{0}//{1}\r\n'.format(person,itemno))
-	f.close()
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT items FROM Inventories WHERE user = ? """, (person,))
+		try:
+			unItems = q.fetchone()[0]
+		except:
+			unItems = ""
+		if len(unItems) >= 50:
+			q.execute("""
+				INSERT OR REPLACE INTO Inventories (user, items, tempItem) VALUES (?, ?, ?) """, (person, unItems, itemno))
+			return "Full"
+		q.execute("""
+			INSERT OR REPLACE INTO Inventories (user, items) VALUES (?, ?) """, (person, unItems + "," + itemno))
+		sql.db.commit()
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Cannot update inventory: {}".format(str(e)))
+		return False
+
+def dropItem(person,itemno=None):
+	q = sql.db.cursor()
+	if itemno is None:
+		q.execute("""
+			SELECT tempItem FROM Inventories WHERE user = ? """, (person,))
+		try:
+			tmpDel = q.fetchone()[0]
+			q.execute("""
+				UPDATE Inventories SET tempItem = NULL WHERE user = ? """, (person,))
+			sql.db.commit()
+			return '2' + tmpDel
+		except:
+			return 6
+	else:
+		q.execute("""
+			SELECT items FROM Inventories WHERE user = ? """, (person,))
+		try:
+			inv = q.fetchone()[0]
+			if inv.find(itemno) != -1:
+				inv = inv.replace(',' + itemno, '')
+				q.execute("""
+					SELECT tempItem FROM Inventories WHERE user = ? """, (person,))
+				try:
+					tmpItem = "," + q.fetchone()[0]
+				except:
+					tmpItem = ""
+				q.execute("""
+					UPDATE Inventories SET items = ? WHERE user = ? """, (inv + tmpItem, person))
+				sql.db.commit()
+				if len(tmpItem) > 0: return '7' + tmpItem[1:5]
+				return 1
+			else:
+				q.execute("""
+					SELECT weapon, armor, boot, acc1, acc2 FROM EquippedItems WHERE user = ? """, (person,))
+				try:
+					inv = q.fetchone()
+					if itemno in inv:
+						place = inv.index(itemno)
+						if place == 0:
+							q.execute("""
+								UPDATE EquippedItems SET weapon = NULL WHERE user = ? """, (person,))
+						elif place == 1:
+                                                        q.execute("""
+                                                                UPDATE EquippedItems SET armor = NULL WHERE user = ? """, (person,))
+						elif place == 2:
+                                                        q.execute("""
+                                                                UPDATE EquippedItems SET boot = NULL WHERE user = ? """, (person,))
+						elif place == 3:
+                                                        q.execute("""
+                                                                UPDATE EquippedItems SET acc1 = NULL WHERE user = ? """, (person,))
+						elif place == 4:
+                                                        q.execute("""
+                                                                UPDATE EquippedItems SET acc2 = NULL WHERE user = ? """, (person,))
+						else: 
+							return 4
+						sql.db.commit()
+						return 1
+				except:
+					return 3
+		except:
+			return 5
+	return 0
+		
 
 def equipItem(person,itemno):
-	stats = getFighterStats(person)
-	with open('inventories','r+') as f:
-		updated=0
-		lines = f.readlines()
-		f.seek(0)
-		for line in lines:
-			if line.split('/')[0].lower() == person.lower():
-				if itemno[0:2] != "04":
-					for itemId in line.split('/')[1].split(','):
-						if itemno[0:2] == itemId[0:2]:
-							updated = '3' + itemId
-							equippedItems = line.split('/')[1]
-	                                                unequippedItems = line.split('/')[2]
-							itemStats = getItemByItemNo(itemno)
-		                                        unitemStats = getItemByItemNo(itemId)
-        	                                        f.write('{0}/{1},{2}/{3},{4}\r\n'.format(person,str.replace(equippedItems,',' + itemId,''),itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n'),itemId))
-                        	                        setFighterStats(fname=person,atk=int(itemStats[2])+(int(stats[2]) - int(unitemStats[2])),grd=int(itemStats[3])+(int(stats[3]) - int(unitemStats[3])),mag=int(itemStats[4])+(int(stats[4]) - int(unitemStats[4])),mdef=int(itemStats[5])+(int(stats[5]) - int(unitemStats[5])),hp=int(itemStats[6])+(int(stats[6]) - int(unitemStats[6])))
-							continue
-				else:
-					accCount = 0
-					for itemId in line.split('/')[1].split(','):
-						if itemno[0:2] == itemId[0:2]:
-							accCount += 1
-						if accCount == 2:
-							updated = 4
-							f.write(line)
-							continue
-				if itemno in line.split('/')[2]:
-					if updated == 0:
-						equippedItems = line.split('/')[1]
-						unequippedItems = line.split('/')[2]
-						f.write('{0}/{1},{2}/{3}\r\n'.format(person,equippedItems,itemno,str.replace(unequippedItems,',' + itemno,'').strip('\r\n')))
-						itemStats = getItemByItemNo(itemno)
-						setFighterStats(fname=person,atk=int(itemStats[2])+int(stats[2]),grd=int(itemStats[3])+int(stats[3]),mag=int(itemStats[4])+int(stats[4]),mdef=int(itemStats[5])+int(stats[5]),hp=int(itemStats[6])+int(stats[6]))
-						updated = 1
-				else: 
-					updated = 2
-					f.write(line)
-			else: f.write(line)
-	f.close()
-	return updated
+	itemCat = str(itemno)[1:2]
+	try:
+		q = sql.db.cursor()
+		# Init EquippedItems table for user...
+		q.execute(""" SELECT user from EquippedItems WHERE user = ? """, (person,))
+		hasEquipment = q.fetchone()
+		if hasEquipment is None:
+			q.execute("""
+				INSERT INTO EquippedItems (user, weapon, armor, boot, acc1, acc2) VALUES (?, ?, ?, ?, ?, ?) """, (person, None, None, None, None, None))
+			sql.db.commit()
+		#--
+		q.execute("""
+			SELECT items from Inventories WHERE user = ? AND items LIKE ? """, (person,'%' + itemno + '%'))
+		items = q.fetchone()
+		try:
+			items = items[0]			
+		except TypeError:
+			return 2
+		if itemCat == "1":
+			q.execute("""
+				SELECT armor FROM EquippedItems WHERE user = ? """, (person,))
+			armor = q.fetchone()[0]
+			q.execute("""
+				UPDATE EquippedItems SET armor = ? WHERE user = ? """, (itemno, person))
+			if armor is None: 
+				q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, ''), person))
+				sql.db.commit()
+				return 1
+			else:			
+				q.execute("""
+					UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, '') + ',' + armor, person))
+				sql.db.commit()
+				return '1' + armor
+		if itemCat == "2":
+                        q.execute("""
+                                SELECT weapon FROM EquippedItems WHERE user = ? """, (person,))
+                        weapon = q.fetchone()[0]
+                        q.execute("""
+                                UPDATE EquippedItems SET weapon = ? WHERE user = ? """, (itemno, person))
+                        if weapon is None:
+				q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, ''), person))
+                                sql.db.commit()
+                                return 1
+                        else:
+                                q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, '') + ',' + weapon, person))
+                                sql.db.commit()
+                                return '1' + weapon
+		if itemCat == "3":
+                        q.execute("""
+                                SELECT boot FROM EquippedItems WHERE user = ? """, (person,))
+                        boot = q.fetchone()[0]
+                        q.execute("""
+                                UPDATE EquippedItems SET boot = ? WHERE user = ? """, (itemno, person))
+                        if boot is None:
+				q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, ''), person))
+                                sql.db.commit()
+                                return 1
+                        else:
+                                q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, '') + ',' + boot, person))
+                                sql.db.commit()
+                                return '1' + boot
+		if itemCat == "4":
+                        q.execute("""
+                                SELECT acc1,acc2 FROM EquippedItems WHERE user = ? """, (person,))
+                        acc = q.fetchone()
+                        if acc[0] is None:
+				q.execute("""
+					UPDATE EquippedItems SET acc1 = ? WHERE user = ? """, (itemno, person))
+				q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, ''), person))
+                                sql.db.commit()
+                                return 1
+			if acc[0] is not None and acc[1] is None:
+				q.execute("""
+					UPDATE EquippedItems SET acc2 = ? WHERE user = ? """, (itemno, person))
+				q.execute("""
+                                        UPDATE Inventories SET items = ? WHERE user = ? """, (items.replace(',' + itemno, ''), person))
+				sql.db.commit()
+				return 1
+			if acc[0] is not None and acc[1] is not None:
+				return 3
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't equip item: {}".format(str(e)))
+		return False
 
 def unequipItem(person,itemno):
-	stats = getFighterStats(person)
-        with open('inventories','r+') as f:
-                updated=0
-                lines = f.readlines()
-                f.seek(0)
-                for line in lines:
-                        if line.split('/')[0].lower() == person.lower():
-                                if itemno in line.split('/')[1]:
-                                        equippedItems = line.split('/')[1]
-					unequippedItems = line.split('/')[2]
-                                        f.write('{0}/{1}/{3},{2}\r\n'.format(person,str.replace(equippedItems,',' + itemno,''),itemno,unequippedItems.strip('\r\n')))
-					itemStats = getItemByItemNo(itemno)
-                                        setFighterStats(fname=person,atk=int(stats[2])-int(itemStats[2]),grd=int(stats[3])-int(itemStats[3]),mag=int(stats[4])-int(itemStats[4]),mdef=int(stats[5])-int(itemStats[5]),hp=int(stats[6])-int(itemStats[6]))
-                                        updated = 1
-                                else: 
-					updated = 2
-					f.write(line)
-			else: f.write(line)
-        f.close()
-        return updated
+	itemCat = str(itemno)[1:2]
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT * FROM EquippedItems WHERE user = ? """, (person,))
+		try:
+			hasEquipment = q.fetchone()
+		except:
+			return 2
+		q.execute("""
+			SELECT items FROM Inventories WHERE user = ? """, (person,))
+		try:
+			items = q.fetchone()[0]
+		except:
+			return 5
+		if itemCat == "1" and hasEquipment[2] is not None:
+			q.execute("""
+				SELECT armor FROM EquippedItems WHERE user = ? AND armor = ? """, (person, itemno))
+			try:
+				armor = q.fetchone()[0]
+			except:
+				return 4
+			q.execute("""
+				UPDATE EquippedItems SET armor = ? WHERE user = ? """, (None, person))
+			q.execute("""
+				UPDATE Inventories SET items = ? WHERE user = ? """, (items + ',' + itemno, person))
+			sql.db.commit()
+			return 1
+		elif itemCat == "1" and hasEquipment[2] is None: return 3
+		if itemCat == "2" and hasEquipment[1] is not None:
+                        q.execute("""
+                                SELECT weapon FROM EquippedItems WHERE user = ? AND weapon = ? """, (person, itemno))
+			try:
+	                        weapon = q.fetchone()[0]
+			except:
+				return 4
+                        q.execute("""
+                                UPDATE EquippedItems SET weapon = ? WHERE user = ? """, (None, person))
+                        q.execute("""
+                                UPDATE Inventories SET items = ? WHERE user = ? """, (items + ',' + itemno, person))
+                        sql.db.commit()
+                        return 1
+                elif itemCat == "2" and hasEquipment[1] is None: return 3
+		if itemCat == "3" and hasEquipment[3] is not None:
+                        q.execute("""
+                                SELECT boot FROM EquippedItems WHERE user = ? AND boot = ? """, (person, itemno))
+                        try:
+                                boot = q.fetchone()[0]
+                        except:
+                                return 4
+                        q.execute("""
+                                UPDATE EquippedItems SET boot = ? WHERE user = ? """, (None, person))
+                        q.execute("""
+                                UPDATE Inventories SET items = ? WHERE user = ? """, (items + ',' + itemno, person))
+                        sql.db.commit()
+                        return 1
+                elif itemCat == "3" and hasEquipment[3] is None: return 3
+		if itemCat == "4" and ( hasEquipment[4] is not None or hasEquipment[5] is not None ):
+                        q.execute("""
+                                SELECT acc1,acc2 FROM EquippedItems WHERE user = ? AND (acc1 = ? OR acc2 = ?) """, (person, itemno, itemno))
+                        try:
+                                acc1 = q.fetchone()[0]
+				acc2 = q.fetchone()[1]
+                        except:
+                                return 4
+			if acc1 == itemno:
+	                        q.execute("""
+	                                UPDATE EquippedItems SET acc1 = ? WHERE user = ? """, (None, person))
+			if acc2 == itemno:
+				q.execute("""
+					UPDATE EquippedItems SET acc2 = ? WHERE user = ? """, (None, person))
+                        q.execute("""
+                                UPDATE Inventories SET items = ? WHERE user = ? """, (items + ',' + itemno, person))
+                        sql.db.commit()
+                        return 1
+                elif itemCat == "4" and hasEquipment[4] is None and hasEquipment[5] is None: return 3
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't unequip item: {}".format(str(e)))
+		return False
+
+def getEquipment(person):
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT weapon, armor, boot, acc1, acc2 FROM EquippedItems WHERE user = ? """, (person,))
+		equipped = q.fetchone()
+		if equipped is None: return False
+		return equipped
+	except Exception as e:
+		return False
 
 def getInventory(person):
-	inventory = []
-	with open('inventories','r') as f:
-		lines = f.readlines()
-		f.seek(0)
-		for line in lines:
-			if line.split('/')[0].lower() == person.lower():
-				inventory = line.split('/')
-	f.close()
-	if len(inventory) == 0: return False
-	return inventory
+	try:
+                q = sql.db.cursor()
+                q.execute("""
+                        SELECT items FROM Inventories WHERE user = ? """, (person,))
+                inventory = q.fetchone()
+                if inventory is None: return False
+                return inventory[0]
+        except Exception as e:
+                return False
+
+def getIsFighting(person):
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT accepted FROM FightsOngoing WHERE (playerOne = ? OR playerTwo = ?) """, (person, person))
+		isFighting = q.fetchone()
+		if isFighting is None: return 0
+		return 1
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Can't determine if user is fighting.  Error: {}".format(str(e)))
+		return 0
 
 def getXPGain(winner,loser):
 	p1 = getFighterStats(winner)
 	p2 = getFighterStats(loser)
-	with open('fightsongoing', 'r') as f:
-        	lines = f.readlines()
-                f.seek(0)
-                for line in lines:
-                        initiator = line.split('[-]')[0]
-			challenger = line.split('[-]')[1]
-			if p1[0] == initiator or p1[0] == challenger:
-				turncount = int(line.split('[-]')[4])
-	f.close()
+	q = sql.db.cursor()
+	try:
+		q.execute("""
+			SELECT turnTotal FROM FightsOngoing WHERE ( playerOne = ? OR playerTwo = ? ) """, (winner, winner))
+		turncount = q.fetchone()[0]
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't determine turn count: {}".format(str(e)))
+		turncount = 0
 	p1lvl = int(p1[1])
 	p2lvl = int(p2[1])
 	if p1lvl > p2lvl: lesserlvl = p2lvl
@@ -415,73 +615,92 @@ def getXPGain(winner,loser):
 	return gains
 
 def updateFight(turnswap):
-	with open('fightsongoing', 'r+') as f:
-		lines = f.readlines()
-		f.seek(0)
-	        for line in lines:
-		        initiator = line.split('[-]')[0]
-			challenger = line.split('[-]')[1]
-		        who = line.split('[-]')[3]
-		        accepted = line.split('[-]')[2]
-			turncount = int(line.split('[-]')[4])
-			try:
-				stopper = line.split('[-]')[6]
-			except:
-				stopper = ''
-			if who.lower() == turnswap.lower() and who.lower() == challenger.lower():
-				f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}".format(initiator,challenger,accepted,initiator,turncount+1,time.time(),stopper))
-			elif who.lower() == turnswap.lower() and who.lower() == initiator.lower():
-				f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}".format(initiator,challenger,accepted,challenger,turncount+1,time.time(),stopper))
-			else:
-				f.write(line)
-		f.truncate()
-		f.close()
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT * FROM FightsOngoing WHERE whoseTurn = ? """, (turnswap,))
+		fight = q.fetchone()
+		try:
+			fight[0]
+		except:
+			return False
+		if fight[0] == turnswap:
+			q.execute("""
+				UPDATE FightsOngoing SET whoseTurn = ?, turnTotal = ?, lastAction = ? WHERE playerOne = ? """, (fight[1],int(fight[4])+1,time.time(),turnswap))
+			sql.db.commit()
+			return True
+		if fight[1] == turnswap:
+			q.execute("""
+                                UPDATE FightsOngoing SET whoseTurn = ?, turnTotal = ?, lastAction = ? WHERE playerOne = ? """, (fight[0],int(fight[4])+1,time.time(),turnswap))
+                        sql.db.commit()
+                        return True
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Cannot update fight: {}".format(str(e)))
+		return False
 
-def getFighterStats(name):
-	specs = None
-	with open('fighters', 'r') as f:
-		for line in f:
-			x = line.split('[-]')
-			if x[0].lower() == name.lower():
-				specs = [x[0],x[1],x[2],x[3],x[4],x[5],x[6],x[7],x[8],x[9],x[10],x[11],x[12],x[13],x[14],x[15],x[16],x[17].strip('\r\n')]
-			else:
-				continue
-	if specs:
-		return specs
-	else:
+def getFighterStats(name,noEquipment=False):
+	try:
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT * FROM Fighters WHERE name = ? """, (name,))
+		specs = q.fetchone()
+		try:
+			specs[0]
+		except:
+			return False
+		equipment = getEquipment(name)
+		if equipment == False or noEquipment == True:
+			return specs
+		# Add equipment values
+		eqSpecs = []
+		eqSpecs = [x for x in specs[:2]]
+		weap = getItemByItemNo(equipment[0]) if equipment[0] is not None else [0 for i in range(10)]
+		armor = getItemByItemNo(equipment[1]) if equipment[1] is not None else [0 for i in range(10)]
+		boot = getItemByItemNo(equipment[2]) if equipment[2] is not None else [0 for i in range(10)]
+		acc1 = getItemByItemNo(equipment[3]) if equipment[3] is not None else [0 for i in range(10)]
+		acc2 = getItemByItemNo(equipment[4]) if equipment[4] is not None else [0 for i in range(10)]
+		eqSpecs.append(specs[2] + weap[3] + armor[3] + boot[3] + acc1[3] + acc2[3])
+		eqSpecs.append(specs[3] + weap[4] + armor[4] + boot[4] + acc1[4] + acc2[4])
+		eqSpecs.append(specs[4] + weap[5] + armor[5] + boot[5] + acc1[5] + acc2[5])
+		eqSpecs.append(specs[5] + weap[6] + armor[6] + boot[6] + acc1[6] + acc2[6])
+		eqSpecs.append(specs[6] + weap[7] + armor[7] + boot[7] + acc1[7] + acc2[7])
+		eqSpecs = eqSpecs + [x for x in specs[7:]]
+		# --
+
+		return eqSpecs
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Unable to get fighter stats: {}".format(str(e)))
 		return False
 
 def doesItMiss(choice,p1lev,p2lev,p1,p2):
-	attackerEquipment = getInventory(p1)
-	defenderEquipment = getInventory(p2)
-	if attackerEquipment: attackerEquipment = attackerEquipment[1]
-	if defenderEquipment: defenderEquipment = defenderEquipment[1]
+	attackerEquipment = getEquipment(p1)
+	defenderEquipment = getEquipment(p2)
 	diff = int(round(((p1lev - p2lev) / 4) - 0.5)) # For every 4 levels the attacker is above the defender, they get a bonus to their to-hit.
 	if diff < 0: diff = 0
 	if FIGHT_VERBOSE: log(p1,p2,"Checking if attack misses...")
 	seed = int(round(time.time()))
 	if choice == 1:
 		base = 5 - diff
-		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
-		if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
-		if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
+		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
+		if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
+		if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
-		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
-                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
-                if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
+		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
+                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
+                if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
-		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
-                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
-                if attackerEquipment != False and ('0406' in attackerEquipment): base = base - 5
+		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
+                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
+                if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
-		if defenderEquipment != False and ('0109' in defenderEquipment or '0301' in defenderEquipment): base = base + 2
-                if defenderEquipment != False and ('0304' in defenderEquipment): base = base + 5
+		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
+                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100
@@ -497,13 +716,15 @@ def doesItMiss(choice,p1lev,p2lev,p1,p2):
 def setFighterStats(fname=None,lvl=None,atk=None,grd=None,mag=None,mdef=None,hp=None,xp=None,wins=None,tmpstat=None,tmpbuff=None,atksincelvl=None,satksincelvl=None,fatksincelvl=None,magatksincelvl=None,grdsincelvl=None,mgrdsincelvl=None,lastfought=None):
 	if not fname:
 		return False
-	specs = None
 	if hp == 0: hp = -1 	# Ran into a bug where doing exact death damage wasn't doing anything.
 	if xp == 0: xp = -1	# This should solve it.  Same for XP.
 	
-	with open('fighters', 'r') as f:
-		for line in f:
-			x = line.split('[-]')
+	q = sql.db.cursor()
+	try:
+		q.execute("""
+			SELECT * FROM Fighters WHERE name = ? """, (fname,))
+		x = q.fetchone()
+		try:
 			if x[0].lower() == fname.lower():
 				if lvl is None: lvl = x[1]
 				if atk is None: atk = x[2]
@@ -516,50 +737,34 @@ def setFighterStats(fname=None,lvl=None,atk=None,grd=None,mag=None,mdef=None,hp=
 				if tmpstat is None: tmpstat = x[9]
 				if tmpbuff is None: tmpbuff = x[10]
 				if atksincelvl is None: atksincelvl = x[11]
-                                if satksincelvl is None: satksincelvl = x[12]
-                                if fatksincelvl is None: fatksincelvl = x[13]
-                                if magatksincelvl is None: magatksincelvl = x[14]
-                                if grdsincelvl is None: grdsincelvl = x[15]
-                                if mgrdsincelvl is None: mgrdsincelvl = x[16]
+	                        if satksincelvl is None: satksincelvl = x[12]
+	                        if fatksincelvl is None: fatksincelvl = x[13]
+	                        if magatksincelvl is None: magatksincelvl = x[14]
+	                        if grdsincelvl is None: grdsincelvl = x[15]
+	                        if mgrdsincelvl is None: mgrdsincelvl = x[16]
 				if lastfought is None: lastfought = x[17]
 				specs = [fname,lvl,atk,grd,mag,mdef,hp,xp,wins,tmpstat,tmpbuff,atksincelvl,satksincelvl,fatksincelvl,magatksincelvl,grdsincelvl,mgrdsincelvl,lastfought]
-			else:
-				continue
-	if not specs or specs is None:
-		f = open('fighters', 'a')
-		f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}[-]{7}[-]{8}[-]{9}[-]{10}[-]0[-]0[-]0[-]0[-]0[-]0[-]{11}\r\n".format(fname,1,5,5,5,5,getMaxHPByLevel(1),13,0,'',0,''))
-		f.close()
-		return True
-	else:
-		with open('fighters', 'r+') as f:
-			lines = f.readlines()
-			f.seek(0)
-			for line in lines:
-				x = line.split('[-]')
-				if x[0] == specs[0]:
-					f.write("{0}[-]{1}[-]{2}[-]{3}[-]{4}[-]{5}[-]{6}[-]{7}[-]{8}[-]{9}[-]{10}[-]{11}[-]{12}[-]{13}[-]{14}[-]{15}[-]{16}[-]{17}\r\n".format(specs[0],specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],str(specs[16]),str(specs[17]).strip('\r\n')))
-				else:
-					f.write(line)
-			f.truncate()
-			f.close()
-	return True
+		except:
+			specs = None
+
+		if not specs or specs is None:
+			q.execute("""
+				INSERT INTO Fighters (name, level, atk, grd, mag, mdef, hp, xp, wins, tmpstat, tmpbuff, atksincelvl, satksincelvl, fatksincelvl, magatksincelvl, grdsincelvl, mgrdsincelvl, lastFought) VALUES (?, 1, 5, 5, 5, 5, ?, 13, 0, ?, 0, 0, 0, 0, 0, 0, 0, ?) """, (fname, getMaxHPByLevel(1),'',''))
+			sql.db.commit()
+			return True
+		else:
+			q.execute("""
+				UPDATE Fighters SET lvl = ?,atk = ?,grd = ?,mag = ?,mdef = ?,hp = ?,xp = ?,wins = ?,tmpstat = ?,tmpbuff = ?,atksincelvl = ?,satksincelvl = ?,fatksincelvl = ?,magatksincelvl = ?,grdsincelvl = ?,mgrdsincelvl = ?, lastFought = ? WHERE name = ? """, (specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],specs[16],specs[17],fname))
+			sql.db.commit()
+			return True
+	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Unable to fetch or set stats: {}".format(str(e)))
+		return False
 
 def levelUp(person):
-	p1 = getFighterStats(person)
+	p1 = getFighterStats(person,noEquipment=True)
 	currentxp = int(p1[7])
 	currentlvl = p1[1]
-	equipped = []
-	with open('inventories','r') as f:
-                updated=0
-                lines = f.readlines()
-                f.seek(0)
-                for line in lines:
-                        if line.split('/')[0].lower() == person.lower():
-                        	for itemId in line.split('/')[1].split(','):
-					if len(itemId.rstrip()) == 4:
-						equipped.append(itemId)
-	                                	unequipItem(person,itemId)
-			else: continue
 	setFighterStats(fname=person,lvl=int(currentlvl)+1,hp=getMaxHPByLevel(int(currentlvl)+1))
 	results = []
 	if int(p1[7]) > 0: return False # This should never happen, but covering all the bases here.
@@ -609,16 +814,6 @@ def levelUp(person):
 				if FIGHT_VERBOSE: log("Increasing Magic Defense by {0}".format(newgrd))
 	                        results.append("you guarded against magic a total of {0} times, resulting in an increase in your mdef stat from {1} to {2}".format(int(stats.get('mgrd')),int(p1[5]),int(p1[5]) + newgrd))
 	newxp = int(round((((float(currentlvl) + 1) * 10) * 1.5) + (float(currentlvl) * (float(currentlvl)-1)) + 1))
-	with open('inventories','r') as f:
-                updated=0
-                lines = f.readlines()
-                f.seek(0)
-                for line in lines:
-                        if line.split('/')[0].lower() == person.lower():
-                                for itemId in equipped:
-					if len(itemId.rstrip()) == 4:
-	                                        equipItem(person,itemId.rstrip())
-                        else: continue
 	if FIGHT_VERBOSE: 
 		log("XP to next level = round((player level * 10) * 1.5) + (player level - 1 * player level - 2) + 1")
 		log("{0} * 1.5 + ({1} * {2}) + 1 = {3}".format((int(currentlvl)+1)*10,int(currentlvl),int(currentlvl)-1,newxp))

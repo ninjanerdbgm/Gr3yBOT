@@ -14,7 +14,7 @@ server = ''
 port = 6667
 channelpw = ''
 botname = 'Gr3yBot'
-version = "1.91. Version Name: Frankystein Mk. III"
+version = "1.97. Version Name: Yes Man Junior"
 
 # Set channels to join.  The first channel will be
 # set as the main channel.  

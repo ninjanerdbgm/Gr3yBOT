@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 from gr3ybot_settings import TWIT_CONSUMER_KEY,TWIT_CONSUMER_SECRET,TWIT_ACCESS_KEY,TWIT_ACCESS_SECRET
+from gr3ysql import Gr3ySQL
+import time
 import tweepy
 from tweepy import OAuthHandler
 import sys
@@ -18,6 +20,8 @@ auth.set_access_token(TWIT_ACCESS_KEY,TWIT_ACCESS_SECRET)
 twit = tweepy.API(auth)
 twot = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 #--
+
+sql = Gr3ySQL()
 
 def getRateLimit():
 	return twit.rate_limit_status()
@@ -89,19 +93,16 @@ def isTweetedAt(bn):
 	for i in twt["statuses"]:
 		if i["retweeted"]: continue
 		ids.append(i["id"])
-		with open('twitids','r') as f:
-			lines = f.readlines()
-			f.seek(0)
-			for line in lines:
-				theline = line.strip('\r').strip('\n')
-				if int(theline) == int(i["id"]):
-					ids.remove(i["id"])
-					break
-			f.close()
-	f = open('twitids','a')
-	for i in ids:	
-		f.write("{0}\n".format(i))
-	f.truncate()
-	f.close()
+		q = sql.db.cursor()
+		q.execute("""
+			SELECT id FROM TwitterIDs WHERE id = ? """, (int(i["id"]),))
+		tid = q.fetchone()
+		try:
+			ids.remove(tid[0])
+		except:
+			for i in ids:
+				q.execute("""
+					INSERT INTO TwitterIDs (id, dateTime) VALUES (?, ?) """, (i, time.time()))
+			sql.db.commit()
 	if len(ids) > 0: return ids
 	else: return False
