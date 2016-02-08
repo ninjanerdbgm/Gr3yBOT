@@ -61,6 +61,9 @@ server_slug = ''
 #		1 - Basic action logging
 #		2 - Basic action and chat logging
 #		3 - Basic actions, chat, and the entire data stream logging
+#       MSG_HISTORY
+#               How many messages to store (per user) in the history db for the sole
+#               purpose of search and replace (s/find/replace) functionality.
 #       FIGHT_VERBOSE
 #               Set this to True if you want to see the fight dice rolls and
 #               damage calculations.
@@ -72,6 +75,7 @@ ECHO_LOG = True
 LOCALTZ = 'US/Pacific'
 
 LOGLEVEL = 1
+MSG_HISTORY = 8
 
 FIGHT_VERBOSE = True
 FIGHTLOG = 'fightinfo.log'

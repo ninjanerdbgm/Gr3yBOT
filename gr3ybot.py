@@ -162,6 +162,28 @@ def log(text):
 		if ECHO_LOG: print "{0} --==-- {1}".format(localnow.strftime(timeformat),text)
 	g.close()
 
+def addToSearchDb(nick,msg):
+	q = con.db.cursor()
+	try:
+		q.execute("""
+			SELECT * FROM Log WHERE user = ? """, (nick,))
+		count = len(q.fetchall())
+		if not count or count is None or count < 5:
+			q.execute("""
+				INSERT INTO Log (dateTime, user, text) VALUES (?, ?, ?) """, (time.time(), nick, msg))
+		if count == MSG_HISTORY:
+			q.execute("""
+				SELECT id FROM Log WHERE user = ? ORDER BY id ASC """, (nick,))
+			firstId = int(q.fetchone()[0])
+			q.execute("""
+				DELETE FROM Log WHERE id = ? """, (firstId,))
+			q.execute("""
+				INSERT INTO Log (dateTime, user, text) VALUES (?, ?, ?) """, (time.time(), nick, msg))
+		con.db.commit()
+	except Exception as e:
+		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last five user messages: {}".format(str(e)))
+		q.rollback()
+
 def admins(nick, host):
 	if LOGLEVEL >= 1: log("Call for an admin check.  Is {} an admin?".format(host))
 	rawbuff = ""
@@ -349,6 +371,18 @@ def rline(f):
 		line = randline
 	return line
 
+def searchAndReplace(u, s, r, chan):
+	q = con.db.cursor()
+	try:
+		q.execute("""
+			SELECT * FROM Log WHERE user = ? AND text LIKE ? ORDER BY id DESC""", (u, '%' + s + '%'))
+		row = q.fetchone()
+		send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
+		if LOGLEVEL >= 1: log("Made a search and replace request")
+	except Exception as e:
+		if LOGLEVEL >= 1: log("ERROR: Unable to perform search and replace: {}".format(str(e)))
+		pass
+
 def checkTwits(chan=channel):
 	#--
 	# Let's check to see if someone tweeted at the bot every so often.
@@ -472,7 +506,7 @@ def main(joined):
 			irc.close()
 			connect()
 
-		for data in f:		
+		for data in f:	
 			if LOGLEVEL == 3: 
 				log(raw)
 			elif LOGLEVEL >= 2:
@@ -2357,7 +2391,7 @@ def main(joined):
 				con.db.commit()
 				#-- END MEMO
 
-				# And now let's see if someone wants a ping when someone else is alive in chat.
+				# Now let's see if someone wants a ping when someone else is alive in chat.
 			
 				q.execute("""
 					SELECT * FROM Pings WHERE checkUser = ? """, (memnick,))
@@ -2369,6 +2403,26 @@ def main(joined):
 						con.db.commit()
 						if LOGLEVEL >= 1: log("Triggering a ping: {0} wanted to know if {1} joined or unidled.".format(pingMsg[2],memnick))
 						continue
+	
+				# Finally, let's see if someone wants to correct themselves.
+			
+				searchReplace = re.compile("s/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])+)/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])*)((/(.*))?)")
+				match = searchReplace.match(getMessage(data))
+			
+				if match:
+					s = match.groups()[0]
+					r = match.groups()[3]
+					searchAndReplace(getNick(data), s, r, getChannel(data))
+				else:
+					chatter = getNick(data)
+		                        message = getMessage(data)
+		                        if (' ' in chatter) == False:
+		                                try:
+		                                        if len(message.rstrip()) > 0:
+	                                        	        addToSearchDb(chatter,message)
+		                                except Exception as e:
+		                                        pass
+					
 			
 			#--
 			# This is the random chatter algorithm.
