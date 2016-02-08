@@ -452,7 +452,7 @@ def checkReminders(chan=channel):
 	#--
 	q = con.db.cursor()
 	q.execute("""
-		SELECT * FROM Reminders WHERE dateTime < ? """, (time.time(),))
+		SELECT * FROM Reminders WHERE atTime < ? """, (time.time(),))
 	for row in q:
 		send("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),chan)
                 privsend("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),row[1])
