@@ -2247,6 +2247,7 @@ def main(joined):
 						lastPerson = getNick(data)
 						lastTime = time.time()
 						if data.lower().find(botname.lower() + ':') != -1: # Did someone say "botname: "?
+							person = getNick(data)
 							msg = getMessage(data)
 							try:
 								msg = msg.lower().split(botname.lower())[1:]
@@ -2256,7 +2257,7 @@ def main(joined):
 							msg = " ".join(msg)
 							msg = msg.translate(None, "\t\r\n")
 							msg = msg.replace(':', '', 1)
-							if LOGLEVEL >= 1: log("{0} >> {1}: {2}".format(getNick(data),botname,msg))
+							if LOGLEVEL >= 1: log("{0} >> {1}: {2}".format(person,botname,msg))
 							msg = msg.lower()
 							if LOGLEVEL >= 1: log("Attempting to reply with cleverbot...")
 							try:
@@ -2265,8 +2266,8 @@ def main(joined):
 								if LOGLEVEL >= 1: log("Cleverbot f'd up: {0}".format(str(e)))
 								continue
 							msg = msg.translate(None, "'\"!:;").lower()
-							send("{0}".format(msg),getChannel(data))
-							if LOGLEVEL >= 1: log("{0}: {1}".format(botname, msg))
+							send("{0}: {1}".format(person,msg),getChannel(data))
+							if LOGLEVEL >= 1: log("{0} replies => {1}: {2}".format(botname, person, msg))
 							# END FIGHT
 
 				# Below is the YouTube info method.
