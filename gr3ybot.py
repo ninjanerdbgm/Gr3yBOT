@@ -419,7 +419,7 @@ def checkReminders(chan=channel):
 		q.execute("""
 			DELETE FROM Reminders WHERE id = ? """, (row[0],))
 		con.db.commit()
-                if LOGLEVEL >= 1: log("Sent a reminder to {0}!".format(thisline[0]))
+                if LOGLEVEL >= 1: log("Sent a reminder to {0}!".format(row[1]))
 	#--
 
 #-- Main Function
