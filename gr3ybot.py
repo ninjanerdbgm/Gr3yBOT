@@ -386,7 +386,8 @@ def searchAndReplace(u, s, r, chan):
 		row = q.fetchall()
 		if len(row) == 1:
 			row = row[0]
-			send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],row[3].lower().replace(s.lower(),r.lower())),chan)
+			search = re.compile(re.escape(s), re.IGNORECASE)
+			send("{0} is dumb and probably meant to say: \"{1}\"".format(row[2],search.sub(r, row[3])),chan)
 		if LOGLEVEL >= 1: log("Made a search and replace request")
 	except Exception as e:
 		if LOGLEVEL >= 1: log("ERROR: Unable to perform search and replace: {}".format(str(e)))
@@ -471,10 +472,13 @@ def main(joined):
 	con.db.create_function("regexp", 2, regexp)
 	disconnected = 0
 	joined = False
-	threshold = 5 * 60
+	threshold = 10 * 60
 	lastPing = time.time()
 	readBuffer = ""
 	while True:
+		try:
+			if len(f) > 0: f.pop() # Flush data
+		except: pass
 		special = 0
 		action = 'none'
 		dataReady = select.select([irc], [], [], 10)
@@ -1723,16 +1727,17 @@ def main(joined):
 								if special == 0: fightsend("k check your pms")
 								privsend("{} equipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
 								if equippedItems == False: privsend("none",person)
-								weapon = getItemByItemNo(equippedItems[0])
-								armor = getItemByItemNo(equippedItems[1])
-								boot = getItemByItemNo(equippedItems[2])
-								acc1 = getItemByItemNo(equippedItems[3])
-								acc2 = getItemByItemNo(equippedItems[4])
-								privsend("weapon: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(weapon[1],weapon[3],weapon[4],weapon[5],weapon[6],weapon[7],weapon[8],weapon[0]),person) if weapon != False else privsend("weapon: none",person)
-								privsend("armor: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(armor[1],armor[3],armor[4],armor[5],armor[6],armor[7],armor[8],armor[0]),person) if armor != False else privsend("armor: none",person)
-								privsend("boots: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(boot[1],boot[3],boot[4],boot[5],boot[6],boot[7],boot[8],boot[0]),person) if boot != False else privsend("boots: none",person)
-								privsend("accessory 1: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(acc1[1],acc1[3],acc1[4],acc1[5],acc1[6],acc1[7],acc1[8],acc1[0]),person) if acc1 != False else privsend("accessory 1: none",person)
-								privsend("accessory 2: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(acc2[1],acc2[3],acc2[4],acc2[5],acc2[6],acc2[7],acc2[8],acc2[0]),person) if acc2 != False else privsend("accessory 2: none",person)
+								else:
+									weapon = getItemByItemNo(equippedItems[0])
+									armor = getItemByItemNo(equippedItems[1])
+									boot = getItemByItemNo(equippedItems[2])
+									acc1 = getItemByItemNo(equippedItems[3])
+									acc2 = getItemByItemNo(equippedItems[4])
+									privsend("weapon: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(weapon[1],weapon[3],weapon[4],weapon[5],weapon[6],weapon[7],weapon[8],weapon[0]),person) if weapon != False else privsend("weapon: none",person)
+									privsend("armor: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(armor[1],armor[3],armor[4],armor[5],armor[6],armor[7],armor[8],armor[0]),person) if armor != False else privsend("armor: none",person)
+									privsend("boots: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(boot[1],boot[3],boot[4],boot[5],boot[6],boot[7],boot[8],boot[0]),person) if boot != False else privsend("boots: none",person)
+									privsend("accessory 1: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(acc1[1],acc1[3],acc1[4],acc1[5],acc1[6],acc1[7],acc1[8],acc1[0]),person) if acc1 != False else privsend("accessory 1: none",person)
+									privsend("accessory 2: {0} (atk: {1} || def: {2} ||  magatk: {3} || magdef: {4} || hp gain: {5}). --== {6}. ==-- Item number: {7}".format(acc2[1],acc2[3],acc2[4],acc2[5],acc2[6],acc2[7],acc2[8],acc2[0]),person) if acc2 != False else privsend("accessory 2: none",person)
 								privsend("{} unequipped items:".format(checkPerson + '\'s' if checkPerson != person else "your"),person)
 								if inventory is None: privsend("none",person)
 								for thing in inventory.split(','):
@@ -1894,13 +1899,20 @@ def main(joined):
 									q = con.db.cursor()
 									q.execute("""
 										INSERT INTO Memos (fromUser,toUser,message,dateTime) VALUES (?, ?, ?, ?) """, (fighter,challenger,"Wanna fight?  Come to {0} and type %fight yes or %fight no".format(fightchan),time.time()))
-									con.db.commit()
-		
+	
 									q.execute("""
-										INSERT INTO FightsOngoing (playerOne,playerTwo,accepted,whoseTurn,turnTotal,lastAction,stopper) VALUES (?, ?, 0, ?, 0, ?, ?) """, (fighter, challenger, challenger, time.time(), ''))
-									con.db.commit()
+										SELECT * FROM FightsOngoing WHERE (playerOne = ? OR playerTwo = ?)""", (getNick(data), getNick(data)))
+									alreadyFighting = q.fetchone()
+									try:
+										fightsend("youre already fighting {0} and it's {1} turn.".format(alreadyFighting[0] if getNick(data) != alreadyFighting[0] else alreadyFighting[1],"their" if alreadyFighting[3] != getNick(data) else "your"))
+										con.db.rollback()
+										continue
+									except:	
+										q.execute("""
+											INSERT INTO FightsOngoing (playerOne,playerTwo,accepted,whoseTurn,turnTotal,lastAction,stopper) VALUES (?, ?, 0, ?, 0, ?, ?) """, (fighter, challenger, challenger, time.time(), ''))
+										con.db.commit()
 
-									fightsend("ok i will ask {0} to accept your challenge.  i wanna see blood gais".format(challenger))
+										fightsend("ok i will ask {0} to accept your challenge.  i wanna see blood gais".format(challenger))
 
 							elif act[0].lower() == "rematch":
 								fighter = getNick(data)
@@ -1917,7 +1929,7 @@ def main(joined):
 
 								q = con.db.cursor()
                                                                 q.execute("""
-                                                                        SELECT * FROM FightsOngoing WHERE (playerOne = ? OR playerOne = ? OR playerTwo = ? OR playerTwo = ?) """, (fighter, challenger, fighter, challenger))
+                                                                        SELECT * FROM FightsOngoing WHERE (playerOne = ? OR playerOne = ? OR playerTwo = ? OR playerTwo = ?) """, (fighter, rematch, fighter, rematch))
                                                                 ogFight = q.fetchone()
                                                                 try:
                                                                         if ogFight[0].lower() == fighter.lower():
@@ -1939,7 +1951,7 @@ def main(joined):
                                                                                         readytofight = 0
                                                                                         break
                                                                         if ogFight[0].lower() == rematch.lower() or ogFight[1].lower() == rematch.lower():
-                                                                                fightsend("everyone hates {0} and theyre already in a fight so wait your turn".format(challenger))
+                                                                                fightsend("everyone hates {0} and theyre already in a fight so wait your turn".format(rematch))
                                                                                 readytofight = 0
                                                                                 break
 
@@ -1953,13 +1965,13 @@ def main(joined):
                                                                         con.db.commit()
 
                                                                         q.execute("""
-                                                                                INSERT INTO FightsOngoing (playerOne,playerTwo,accepted,whoseTurn,turnTotal,lastAction,stopper) VALUES (?, ?, 0, ?, 0, ?, ?) """, (fighter, rematch, challenger, time.time(), stopper))
+                                                                                INSERT INTO FightsOngoing (playerOne,playerTwo,accepted,whoseTurn,turnTotal,lastAction,stopper) VALUES (?, ?, 0, ?, 0, ?, ?) """, (fighter, rematch, rematch, time.time(), ''))
                                                                         con.db.commit()
 
                                                                         fightsend("ok i will ask {0} to accept your challenge.  i wanna see blood gais".format(rematch))
+									foundamatch = 1
 								if foundamatch == 0:
 									fightsend("um, did you ever fight before because i dont even know who you are. %fight help")
-								f.close()
 
 							elif act[0].lower() == "yes":
 								# Let's make sure this person has a spec sheet now...
@@ -1974,7 +1986,7 @@ def main(joined):
 	
 								q = con.db.cursor()
 								q.execute("""
-									SELECT * FROM FightsOngoing WHERE playerOne = ? OR playerTwo = ? """, (challenger,))
+									SELECT * FROM FightsOngoing WHERE playerOne = ? OR playerTwo = ? """, (challenger,challenger))
 								stopFight = q.fetchone()
 								try:
 									initiator = stopFight[0]
@@ -1984,12 +1996,16 @@ def main(joined):
 									stopper = stopFight[6]
 								except:
 									continue
-
+								try:
+									stopper.lower()
+								except:
+									fightsend("yes what")
+									continue
 								if opponent.lower() == stopper.lower(): winner = initiator
 								if initiator.lower() == stopper.lower(): winner = opponent
 								if (stopper and stopper.lower() == challenger.lower()) and int(accepted) == 1:
 									q.execute("""
-										DELETE FROM FightsOngoing WHERE playerOne = ? or playerTwo = ? """ (challenger, challenger))
+										DELETE FROM FightsOngoing WHERE playerOne = ? or playerTwo = ? """, (challenger, challenger))
 									con.db.commit()
 									fightsend("seriously why do i even bother. fight canceled.")
 									p1=getFighterStats(winner)
@@ -2038,7 +2054,7 @@ def main(joined):
 										g.close()
 									writeHistory(initiator,who,"{0} began a fight against {1}!".format(initiator,who))
 									q.execute("""
-										UPDATE FightsOngoing SET playerOne = ?, playerTwo = ?, accepted = 1, whoseTurn = ?, turnTotal = 1, lastAction = ?, stopper = ?) WHERE playerOne = ? or playerTwo = ? """ (initiator,who,whofirst,time.time(),stopper,challenger,challenger))
+										UPDATE FightsOngoing SET playerOne = ?, playerTwo = ?, accepted = 1, whoseTurn = ?, turnTotal = 1, lastAction = ?, stopper = ? WHERE playerOne = ? or playerTwo = ? """, (initiator,who,whofirst,time.time(),stopper,challenger,challenger))
 									con.db.commit()
 									fightsend("ok cool, i randomly pick {0} to go first. type %fight help actions if you dont know what to do".format(whofirst))
 
@@ -2053,13 +2069,15 @@ def main(joined):
 									fightsend("are you fighting anyone tho")
 									continue
 								else:
+									if gotFight[0] == getNick(data): oppo = gotFight[1]
+									else: oppo = gotFight[0]
 									if gotFight[2] == 0:
 										fightsend("wow youre boring. ok then")
 										q.execute("""
-											DELETE FROM FightsOngoing WHERE (playerOne = ? or playerTwo = ?) AND accepted = 0 """)
+											DELETE FROM FightsOngoing WHERE (playerOne = ? or playerTwo = ?) AND accepted = 0 """, (getNick(data), getNick(data)))
 										con.db.commit()
 									elif act[0].lower() != "no" and gotFight[2] == 1 and (not gotFight[6] or gotFight[6] is None):
-										fightsend("what seriously?  if you stop the fight now {0} will still get full credit for winning. are you sure you want to stop? %fight yes or %fight no".format(person))
+										fightsend("what seriously?  if you stop the fight now {0} will still get full credit for winning. are you sure you want to stop? %fight yes or %fight no".format(oppo))
 
 										q.execute("""
 											UPDATE FightsOngoing SET stopper = ? WHERE playerOne = ? or playerTwo = ? """, (getNick(data),getNick(data),getNick(data)))
@@ -2078,17 +2096,31 @@ def main(joined):
 										continue
 
 							elif act[0].lower() == "stats":
+								noitems = False
 								try:
 									whostats = act[1]
+									if whostats == "-noitems":
+										try:
+											whostats = act[2]
+											noitems = True
+										except:
+											whostats = getNick(data)
+											noitems = True
 								except IndexError:
 									whostats = getNick(data)
-								checkStats = getFighterStats(whostats)
+									try:
+										if act[2] == "-noitems":
+											noitems = True
+									except:
+										noitems = False
+								if noitems == False: checkStats = getFighterStats(whostats) 
+								else: checkStats = getFighterStats(whostats,True)
 								if not checkStats or checkStats is False:
 									fightsend("that person doesnt have a statsheet yet because they are a coward or idle.  probably a coward.")
 									continue
 								else:
-									fightsend("stats for {0}:".format(whostats))
-									fightsend("lvl: {0}, atk: {1}, grd: {2}, mag: {3}, mdef: {4}, hp: {5}, xp to next lvl: {6}, wins: {7}".format(checkStats[1],checkStats[2],checkStats[3],checkStats[4],checkStats[5],checkStats[6],checkStats[7],checkStats[8]))
+									fightsend("stats for {0}:".format(whostats)) if special == 0 else privsend("stats for {0}:".format(whostats),getNick(data))
+									fightsend("lvl: {0}, atk: {1}, grd: {2}, mag: {3}, mdef: {4}, hp: {5}, xp to next lvl: {6}, wins: {7}".format(checkStats[1],checkStats[2],checkStats[3],checkStats[4],checkStats[5],checkStats[6],checkStats[7],checkStats[8])) if special == 0 else privsend("lvl: {0}, atk: {1}, grd: {2}, mag: {3}, mdef: {4}, hp: {5}, xp to next lvl: {6}, wins: {7}".format(checkStats[1],checkStats[2],checkStats[3],checkStats[4],checkStats[5],checkStats[6],checkStats[7],checkStats[8]),getNick(data))
 
 							elif act[0].lower() == "history" and FIGHT_HISTORY:
 								name = getNick(data)
@@ -2135,12 +2167,15 @@ def main(joined):
 									inafight = 1
 									if name == gotFight[3] and gotFight[2] == 1:
 										attacker = name
+									else:
+										fightsend("it isnt your turn stop being impatient")
+										continue
 									if attacker == gotFight[1]:
 										defender = gotFight[0]
 									else:
 										defender = gotFight[1]
-										canattack = 1
-										fighting = 1
+									canattack = 1
+									fighting = 1
 								if 1 <= int(act[0]) <= 6 and canattack == 1:
 									results = resolveAttack(int(act[0]),attacker,defender)
 									if results is False or not results: 
@@ -2231,13 +2266,14 @@ def main(joined):
 			                                                                continue
 										if LOGLEVEL >= 1: log("{0} got an item from the fight! They got: {1}".format(itemPerson,item[0]))
 			                                                        privsend("After the fight, you found a treasure chest.",itemPerson)
-			                                                        privsend("In the chest was: --== {0} ==-- (Atk: {1} || Def: {2} || MagAtk: {3} || MagDef: {4} || HP Gain: {5}). --== {6}. ==--  Item number: {7}".format(item[0],item[2],item[3],item[4],item[5],item[6],item[7],itemNo),itemPerson)
+			                                                        privsend("In the chest was: --== {0} ==-- (Atk: {1} || Def: {2} || MagAtk: {3} || MagDef: {4} || HP Gain: {5}). --== {6}. ==--  Item number: {7}".format(item[1],item[3],item[4],item[5],item[6],item[7],item[8],itemNo),itemPerson)
 			                                                        updateInventory(itemPerson,itemNo)
 			                                                        privsend("It's been added to your inventory.  To see your inventory, type %fight inventory",itemPerson)
 										privsend("To equip it now, type %fight equip {}".format(itemNo),itemPerson)
 							else:
 								fightsend("maybe you need to look at %fight help.  or learn how to read.  one of the two.")
-							
+							act = None
+							f.pop()		
 					else:
 						try:
 							lastMessage = getMessage(data)
@@ -2412,23 +2448,26 @@ def main(joined):
 						continue
 	
 				# Finally, let's see if someone wants to correct themselves.
-			
-				searchReplace = re.compile("s/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])+)/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])*)((/(.*))?)")
-				match = searchReplace.match(getMessage(data))
-			
-				if match:
-					s = match.groups()[0]
-					r = match.groups()[3]
-					searchAndReplace(getNick(data), s, r, getChannel(data))
-				else:
-					chatter = getNick(data)
-		                        message = getMessage(data)
-		                        if (' ' in chatter) == False:
-		                                try:
-		                                        if len(message.rstrip()) > 0:
-	                                        	        addToSearchDb(chatter,message)
-		                                except Exception as e:
-		                                        pass
+				try:
+					info[0]
+					info = None
+				except:
+					searchReplace = re.compile("s/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])+)/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])*)((/(.*))?)")
+					match = searchReplace.match(getMessage(data))
+				
+					if match:
+						s = match.groups()[0]
+						r = match.groups()[3]
+						searchAndReplace(getNick(data), s, r, getChannel(data))
+					else:
+						chatter = getNick(data)
+			                        message = getMessage(data)
+			                        if (' ' in chatter) == False:
+			                                try:
+			                                        if len(message.rstrip()) > 0:
+		                                        	        addToSearchDb(chatter,message)
+			                                except Exception as e:
+			                                        pass
 					
 			
 			#--
@@ -2556,8 +2595,6 @@ def main(joined):
 						time.sleep(.5)
 						send("d-k.  DONKEYKONGISHERE.",getChannel(data))
 
-			f.pop() # Flush the data.
-		
 #-- Make sure this is the main script
 if __name__ == '__main__':
 	if not CONFIGURED:

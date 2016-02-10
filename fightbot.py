@@ -556,6 +556,7 @@ def getEquipment(person):
 		if equipped is None: return False
 		return equipped
 	except Exception as e:
+		if FIGHT_VERBOSE: log(text="ERROR: Couldn't get equipment: {}".format(str(e)))
 		return False
 
 def getInventory(person):
@@ -631,7 +632,7 @@ def updateFight(turnswap):
 			return True
 		if fight[1] == turnswap:
 			q.execute("""
-                                UPDATE FightsOngoing SET whoseTurn = ?, turnTotal = ?, lastAction = ? WHERE playerOne = ? """, (fight[0],int(fight[4])+1,time.time(),turnswap))
+                                UPDATE FightsOngoing SET whoseTurn = ?, turnTotal = ?, lastAction = ? WHERE playerTwo = ? """, (fight[0],int(fight[4])+1,time.time(),turnswap))
                         sql.db.commit()
                         return True
 	except Exception as e:
@@ -672,6 +673,17 @@ def getFighterStats(name,noEquipment=False):
 		if FIGHT_VERBOSE: log(text="ERROR: Unable to get fighter stats: {}".format(str(e)))
 		return False
 
+def getEquipmentBonus(attacker=False,defender=False):
+	bonus = 0
+	if defender != False:
+		if (defender[2] is not None or defender[3] is not None) and ('0109' == defender[2] or '0301' == defender[3]): bonus = bonus + 2
+	        if defender[2] is not None and ('0304' == defender[2]): bonus = bonus + 5
+	else: bonus = 0
+	if attacker != False:
+	        if (attacker[4] is not None and attacker[5] is not None) and (attacker[4] == '0406' or attacker[5] == '0406'): bonus = bonus - 5
+	else: bonus = bonus
+	return bonus
+
 def doesItMiss(choice,p1lev,p2lev,p1,p2):
 	attackerEquipment = getEquipment(p1)
 	defenderEquipment = getEquipment(p2)
@@ -681,26 +693,19 @@ def doesItMiss(choice,p1lev,p2lev,p1,p2):
 	seed = int(round(time.time()))
 	if choice == 1:
 		base = 5 - diff
-		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
-		if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
-		if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
+		base = base + getEquipmentBonus(attackerEquipment,defenderEquipment)
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for standard attack = 5 - level bonus ====> 5 - {0} = {1}".format(diff,base))
 	if choice == 2:
 		base = 25 - diff
-		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
-                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
-                if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
+		base = base + getEquipmentBonus(attackerEquipment,defenderEquipment)
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for strong attack = 25 - level bonus ====> 25 - {0} = {1}".format(diff,base))
 	if choice == 3:
 		base = 2 - diff
-		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
-                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
-                if (attackerEquipment[4] is not None and attackerEquipment[5] is not None) and (attackerEquipment[4] == '0406' or attackerEquipment[5] == '0406'): base = base - 5
+		base = base + getEquipmentBonus(attackerEquipment,defenderEquipment)
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for flurry attack = 2 - level bonus ====> 2 - {0} = {1}".format(diff,base))
 	if choice == 4:
 		base = 12 - diff
-		if (defenderEquipment[2] is not None or defenderEquipment[3] is not None) and ('0109' == defenderEquipment[2] or '0301' == defenderEquipment[3]): base = base + 2
-                if defenderEquipment[2] is not None and ('0304' == defenderEquipment[2]): base = base + 5
+		base = base + getEquipmentBonus(defender=defenderEquipment)
 		if FIGHT_VERBOSE: log(p1,p2,"BASE for magic attack = 12 - level bonus ====> 12 - {0} = {1}".format(diff,base))
 	seedtwo = xOrShift()
 	tomiss = (seed * 246) ** (abs((p2lev - p1lev)) + random.randint(1,4)) % 100
@@ -754,7 +759,7 @@ def setFighterStats(fname=None,lvl=None,atk=None,grd=None,mag=None,mdef=None,hp=
 			return True
 		else:
 			q.execute("""
-				UPDATE Fighters SET lvl = ?,atk = ?,grd = ?,mag = ?,mdef = ?,hp = ?,xp = ?,wins = ?,tmpstat = ?,tmpbuff = ?,atksincelvl = ?,satksincelvl = ?,fatksincelvl = ?,magatksincelvl = ?,grdsincelvl = ?,mgrdsincelvl = ?, lastFought = ? WHERE name = ? """, (specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],specs[16],specs[17],fname))
+				UPDATE Fighters SET level = ?,atk = ?,grd = ?,mag = ?,mdef = ?,hp = ?,xp = ?,wins = ?,tmpstat = ?,tmpbuff = ?,atksincelvl = ?,satksincelvl = ?,fatksincelvl = ?,magatksincelvl = ?,grdsincelvl = ?,mgrdsincelvl = ?, lastFought = ? WHERE name = ? """, (specs[1],specs[2],specs[3],specs[4],specs[5],specs[6],specs[7],specs[8],specs[9],specs[10],specs[11],specs[12],specs[13],specs[14],specs[15],specs[16],specs[17],fname))
 			sql.db.commit()
 			return True
 	except Exception as e:
@@ -762,7 +767,7 @@ def setFighterStats(fname=None,lvl=None,atk=None,grd=None,mag=None,mdef=None,hp=
 		return False
 
 def levelUp(person):
-	p1 = getFighterStats(person,noEquipment=True)
+	p1 = getFighterStats(person,True)
 	currentxp = int(p1[7])
 	currentlvl = p1[1]
 	setFighterStats(fname=person,lvl=int(currentlvl)+1,hp=getMaxHPByLevel(int(currentlvl)+1))
@@ -771,54 +776,53 @@ def levelUp(person):
 	stats = {'atk':int(p1[11]), 'satk':int(p1[12]), 'fatk':int(p1[13]), 'magatk':int(p1[14]), 'grd':int(p1[15]), 'mgrd':int(p1[16])}
 	stats = OrderedDict(sorted(stats.items(), key=lambda t: t[1], reverse=True))
 	for i in range(0,3):
-		p1 = getFighterStats(person)
 		if stats.keys()[i] == 'atk':
 			if stats.get('atk') > 0:
 				newatk = int(round(int(stats.get('atk')) / 8 + (int(currentlvl) / 3)))
 				if newatk < 1: newatk = 1
 				setFighterStats(fname=person,atk=int(p1[2]) + newatk)	
-				if FIGHT_VERBOSE: log("Increasing Attack by {0}".format(newatk))
+				if FIGHT_VERBOSE: log(text="Increasing Attack by {0}".format(newatk))
 				results.append("you attacked a total of {0} times, resulting in an increase in your atk stat from {1} to {2}".format(int(stats.get('atk')),int(p1[2]),int(p1[2]) + newatk))
 		elif stats.keys()[i] == 'satk':
 			if stats.get('satk') > 0:
 				newatk = int(p1[2]) + 2
 	                        setFighterStats(fname=person,atk=newatk)
-				if FIGHT_VERBOSE: log("Increasing Attack by 2")
+				if FIGHT_VERBOSE: log(text="Increasing Attack by 2")
 	                        results.append("you strong attacked a total of {0} times, resulting in an increase in your atk stat from {1} to {2}".format(int(stats.get('satk')),int(p1[2]),newatk))
 		elif stats.keys()[i] == 'fatk':
 			if stats.get('fatk') > 0:
 				newatk = int(p1[2]) + 1
 				newdef = int(p1[3]) + 1
 	                        setFighterStats(fname=person,atk=newatk,grd=newdef)
-				if FIGHT_VERBOSE: log("Increasing Attack by 1, Defense by 1")
+				if FIGHT_VERBOSE: log(text="Increasing Attack by 1, Defense by 1")
 	                        results.append("you flurried a total of {0} times, resulting in an increase in your atk and grd stats by 1 each".format(int(stats.get('fatk'))))
 		elif stats.keys()[i] == 'magatk':
 			if stats.get('magatk') > 0:
 				newatk = int(round(int(stats.get('magatk')) / 8 + (int(currentlvl) / 3)))
 				if newatk < 1: newatk = 1
 	                        setFighterStats(fname=person,mag=int(p1[4]) + newatk)
-				if FIGHT_VERBOSE: log("Increasing Magic Attack by {0}".format(newatk))
+				if FIGHT_VERBOSE: log(text="Increasing Magic Attack by {0}".format(newatk))
 	                        results.append("you attacked with magic a total of {0} times, resulting in an increase in your mag stat from {1} to {2}".format(int(stats.get('magatk')),int(p1[4]),int(p1[4]) + newatk))
 		elif stats.keys()[i] == 'grd':
 			if stats.get('grd') > 0:
 				newgrd = int(round(int(stats.get('grd')) / 5 + (int(currentlvl) / 3)))
 				if newgrd < 1: newgrd = 1
 	                        setFighterStats(fname=person,grd=int(p1[3]) + newgrd)
-				if FIGHT_VERBOSE: log("Increasing Defense by {0}".format(newgrd))
+				if FIGHT_VERBOSE: log(text="Increasing Defense by {0}".format(newgrd))
 	                        results.append("you guarded a total of {0} times, resulting in an increase in your grd stat from {1} to {2}".format(int(stats.get('grd')),int(p1[3]),int(p1[3]) + newgrd))
 		else:
 			if stats.get('mgrd') > 0:
 				newgrd = int(round(int(stats.get('mgrd')) / 5 + (int(currentlvl) / 3)))
 				if newgrd < 1: newgrd = 1
 	                        setFighterStats(fname=person,mdef=int(p1[5]) + newgrd)
-				if FIGHT_VERBOSE: log("Increasing Magic Defense by {0}".format(newgrd))
+				if FIGHT_VERBOSE: log(text="Increasing Magic Defense by {0}".format(newgrd))
 	                        results.append("you guarded against magic a total of {0} times, resulting in an increase in your mdef stat from {1} to {2}".format(int(stats.get('mgrd')),int(p1[5]),int(p1[5]) + newgrd))
 	newxp = int(round((((float(currentlvl) + 1) * 10) * 1.5) + (float(currentlvl) * (float(currentlvl)-1)) + 1))
 	if FIGHT_VERBOSE: 
-		log("XP to next level = round((player level * 10) * 1.5) + (player level - 1 * player level - 2) + 1")
-		log("{0} * 1.5 + ({1} * {2}) + 1 = {3}".format((int(currentlvl)+1)*10,int(currentlvl),int(currentlvl)-1,newxp))
-		log("Subtract excess xp from last level gain.")
-		log("XP to next level: {0}".format(newxp+currentxp))
+		log(text="XP to next level = round((player level * 10) * 1.5) + (player level - 1 * player level - 2) + 1")
+		log(text="{0} * 1.5 + ({1} * {2}) + 1 = {3}".format((int(currentlvl)+1)*10,int(currentlvl),int(currentlvl)-1,newxp))
+		log(text="Subtract excess xp from last level gain.")
+		log(text="XP to next level: {0}".format(newxp+currentxp))
 	setFighterStats(fname=person,xp=newxp+currentxp)
 	return results
 			
