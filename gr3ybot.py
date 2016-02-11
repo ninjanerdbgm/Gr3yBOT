@@ -472,7 +472,7 @@ def main(joined):
 	con.db.create_function("regexp", 2, regexp)
 	disconnected = 0
 	joined = False
-	threshold = 10 * 60
+	threshold = 15 * 60
 	lastPing = time.time()
 	readBuffer = ""
 	while True:
@@ -481,7 +481,7 @@ def main(joined):
 		except: pass
 		special = 0
 		action = 'none'
-		dataReady = select.select([irc], [], [], 10)
+		dataReady = select.select([irc], [], [])
 		if dataReady[0]:
 			try:
 				raw = irc.recv(1024)
@@ -503,8 +503,9 @@ def main(joined):
 				readBuffer = f.pop()
 			except:
 				continue
-
-		if (time.time() - lastPing) > threshold:
+		else: continue
+		connected = "Thu"
+		if (time.time() - lastPing) > threshold and len(raw) == 0:
 			if LOGLEVEL >= 1: 
 				log("\n============================================\nFATAL ERROR:\n============================================")
 				log("The bot has been disconnected from the server.  Reconnecting...")
@@ -550,6 +551,7 @@ def main(joined):
 			if data.find('#') != -1:
 				action = data.split('#')[0]
 				action = action.split(' ')[1]
+				connected = connected + "nderf"
 			try:
 				name = getNick(data)
 				host = getHost(data)
@@ -566,7 +568,9 @@ def main(joined):
 
 			if action != 'none':
 				sender = getNick(data)
+				connected = connected + "ury, Bless"
 				defchannel = channels[0]
+				checkReminders(getChannel(data))
 				if action == 'JOIN': joined = 1
 				if action == 'PRIVMSG':
 					if getChannel(data) == fightchan:
@@ -673,7 +677,6 @@ def main(joined):
 							else:
 								send("ill join my fist to your face",getChannel(data))
 								continue
-
 						#--
 
 						#--
@@ -825,7 +828,6 @@ def main(joined):
 							if special == 0: send("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),getChannel(data))
 							else: name = getNick(data); privsend("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),name)
 							if LOGLEVEL >= 1: log("Version: {0}".format(version))
-				
 						# SYNSHOP COMMAND
 						if info[0].lower() == 'synshop':
 							nick = getNick(data)
@@ -953,7 +955,7 @@ def main(joined):
 								continue
 							
 
-						# URBAN DICTIONARY			
+						# URBAN DICTIONARY
 						if info[0].lower() == 'define' and URBANDICT_ENABLED:
 							try:
 								mean = info[1:]
@@ -1071,7 +1073,6 @@ def main(joined):
 								privsend("ok im done now thx",name)
 							if LOGLEVEL >= 1: log("Episode: {0}\nDescription: {1}\nURL: {2}".format(feed["entries"][0]["title_detail"]["value"],feed["entries"][0]["summary_detail"]["value"],feed["entries"][0]["id"]))
 							
-		
 						# HELP
 						if (info[0].lower() in help_keywords):
 							name = getNick(data)
@@ -1304,6 +1305,7 @@ def main(joined):
 							if len(msg) == 0:
 								send("@{0} doesnt have no tweets yet".format(tweetnick),getChannel(data))
 								if LOGLEVEL >= 1: log("Doesn't have any tweets")
+								continue
 							for tweet in msg:
 								try:
 									msg = tweet.retweeted_status.text
@@ -1315,7 +1317,6 @@ def main(joined):
 								tweetnick = tweetnick.encode('utf-8')
 								send("@{0} >> {1}".format(tweetnick,msg),getChannel(data))
 								if LOGLEVEL >= 1: log("@{0} >> {1}".format(tweetnick, msg))
-		
 						# POST A TWEET
 						if info[0].lower() == 'tweet' and TWITTER_ENABLED:
 							#--
@@ -1700,7 +1701,7 @@ def main(joined):
 									privsend("------",name)
 									privsend("heres a list or something:",name)
 									privsend("%fight challenge <name> - challenge <name> to a fight",name)
-									privsend("%fight stats (<name>) - get the stats of <name>, if no <name> specified, then get your own stats",name)
+									privsend("%fight stats (<name>) [-noitems] - get the stats of <name>, if no <name> specified, then get your own stats.  if you specify -noitems, then youll see the stats of the person without their equipped items",name)
 									privsend("%fight cancel - cancel a fight. if the fight hasnt been accepted, theres no penalty, otherwise your opponent gets a win",name)
 									privsend("------",name)
 									privsend("heres some stuff about inventories:",name)
@@ -2385,7 +2386,7 @@ def main(joined):
 						except Exception as e:
 							# Something went wrong.  Log it.
 							if LOGLEVEL >= 1: log("WARNING: {}".format(str(e)))
-
+				connected = connected + "ed Blad"
 				#-- 
 				# Below is the Gimli subroutine.
 				# It looks for two back-to-back instances of the word "and" beginning a sentence
@@ -2395,6 +2396,7 @@ def main(joined):
 				# This is by design.
 				#--:
 				gimli = getMessage(data)
+				connected = connected + "e of the w"
 				try: 
 					gimli = gimli.split(' ')[0:]
 				except AttributeError:
@@ -2409,6 +2411,15 @@ def main(joined):
 				else:
 					andcount=0
 				#-- END GIMLI
+
+				#-- What? Did somebody say..
+				connected = connected + "indseeker"
+				if connected.lower() in data.lower():
+					send("did somebody say [{}]?!".format(connected),getChannel(data),tell=True)
+				#-- Who? 
+
+				if "/rant" in data.lower():
+					send("geez take a breath dude its ok",getChannel(data))
 		
 				#--
 				# Below is the process to tell someone a memo that was left for them,
@@ -2507,6 +2518,7 @@ def main(joined):
 						continue
 					try:
 						send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),defchannel)
+						if LOGLEVEL >= 1: log("Idle chatter: Checking @{}'s Twitter feed for latest status.".format(fol))
 					except Exception as e:
 						if LOGLEVEL >= 1: log("Can't retrieve twitter followers: {0}".format(str(e)))
 						continue
@@ -2520,16 +2532,20 @@ def main(joined):
 						send("nevermind.  @{0} is a buttface and wont accept my follow request".format(tweetnick),getChannel(data))
 						if LOGLEVEL >= 1: log("Not Authorized")
 						continue
+					if len(mag) == 0:
+						send("huh i guess @{} never tweeted anything befote in their life ever".format(tweetnick),getChannel(data))
+						if LOGLEVEL >= 1: log("No tweets found!")
+						continue
 					for tweet in mag:
 						try:
-							mag = tweet.retweeted_status.text
+							msg = tweet.retweeted_status.text
 							getrt = tweet.text.split('@')[1].split(':')[0]
-							mag = "RT @{0}: {1}".format(getrt,mag)
+							msg = "RT @{0}: {1}".format(getrt,msg)
 						except (Exception, AttributeError) as e:
 							if LOGLEVEL >= 1: log("Non-fatal issue with tweet: {0}".format(str(e)))
-							mag = tweet.text
-						send("@{0} >> {1}".format(fol,mag),defchannel)
-						if LOGLEVEL >= 1: log("Random Chatter: @{0} >> {1}".format(fol, mag))
+							msg = tweet.text
+						send("@{0} >> {1}".format(fol,msg),defchannel)
+						if LOGLEVEL >= 1: log("Random Chatter: @{0} >> {1}".format(fol, msg))
 						send("follow {} to get your tweets in here".format(twittername),defchannel)
 				if 45 < saysomething <= 100:
 					# Let's make sure the variables are initialized.
