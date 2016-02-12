@@ -469,6 +469,7 @@ def checkReminders(chan=channel):
 #-- Main Function
 def main(joined):
 	connect()
+	ircConnect = [irc,sys.stdin]
 	con.db.create_function("regexp", 2, regexp)
 	disconnected = 0
 	joined = False
@@ -481,29 +482,33 @@ def main(joined):
 		except: pass
 		special = 0
 		action = 'none'
-		dataReady = select.select([irc], [], [])
-		if dataReady[0]:
-			try:
-				raw = irc.recv(1024)
-				# Reply to PING
-				if raw[0:4] == 'PING':
-					try:
-						lastPing = time.time()
-						tellinghistory = 0
-						time.sleep(1)
-						irc.send('PONG ' + raw.split()[1] + '\r\n')
-						if LOGLEVEL >= 1: log("Sent a ping response.")
-						pingActions(getChannel(raw))
-					except Exception as e:
-						if LOGLEVEL >= 1: log("Couldn't send PONG response: {}".format(str(e)))
-	                                	continue
-	
-				readBuffer = readBuffer + raw
-				f = readBuffer.split('\n')
-				readBuffer = f.pop()
-			except:
+		dataReady = select.select(ircConnect, [], [])
+		for s in dataReady[0]:
+			if s == sys.stdin:
+				k = sys.stdin.readline()
 				continue
-		else: continue
+			else:
+				try:
+					raw = irc.recv(1024)
+					# Reply to PING
+					if raw[0:4] == 'PING':
+						try:
+							lastPing = time.time()
+							tellinghistory = 0
+							time.sleep(1)
+							irc.send('PONG ' + raw.split()[1] + '\r\n')
+							if LOGLEVEL >= 1: log("Sent a ping response.")
+							pingActions(getChannel(raw))
+						except Exception as e:
+							if LOGLEVEL >= 1: log("Couldn't send PONG response: {}".format(str(e)))
+		                                	continue
+		
+					readBuffer = readBuffer + raw
+					f = readBuffer.split('\n')
+					readBuffer = f.pop()
+				except socket.error as e:
+					print str(e)
+					continue
 		connected = "Thu"
 		if (time.time() - lastPing) > threshold and len(raw) == 0:
 			if LOGLEVEL >= 1: 
@@ -1460,6 +1465,29 @@ def main(joined):
 							else:
 								send("im pretty sure your slack username is supposed to be one word",getChannel(data))
 
+						# LAST SEEN
+						if (info[0].lower() == 'seen'):
+							try:
+								who = info[1].rstrip()
+							except:
+								send("you gotta specify a name sister",getChannel(data))
+								continue
+							if who.lower() == botname.lower():
+								send("im here now",getChannel(data))
+								continue
+							q = con.db.cursor()
+							q.execute("""
+								SELECT Time,Channel,Msg FROM LastSeen WHERE User = ? """, (who,))
+							ls = q.fetchone()
+							try:
+								localnow = datetime.datetime.now(timezone(LOCALTZ))
+								send("i think i saw {0} active in {1} around {2} at {3}".format(who,ls[1].rstrip(),datetime.datetime.fromtimestamp(ls[0]).strftime("%b %d"),datetime.datetime.fromtimestamp(ls[0]).strftime("%-I:%M %p"),getChannel(data)))
+								send("iirc, they said: {0}".format(ls[2]),getChannel(data))
+								continue
+							except:
+								send("i havent seen that bro(ette) yet.",getChannel(data))
+								continue
+	
 						# PING
 						if info[0].lower() == 'ping' and PING_ENABLED:
 							if special == 1: name = getNick(data); privsend("you can only ping someone from a public channel.  try this in {0}".format(channel),name); continue
@@ -2332,7 +2360,7 @@ def main(joined):
 						pass
 					else:
 						newsSummary = None
-					findurl=re.compile("""((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))""")
+					findurl=re.compile("""((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?]))""")
 					for url in re.findall(findurl, data):
 						newsurl = url[0]
 						if not newsurl.startswith('http'):
@@ -2343,7 +2371,7 @@ def main(joined):
 							if str(e).lower() == "too many values to unpack":
 								err = whoHasTimeToRead(newsurl)
 								if err == "~~HTTPS~~":
-									send("i am gonna summarize this article but they want me to use cookies so this might take a while plz b patient. pls.",getChannel(data))
+									send("ima try to summarize this article but they want me to use cookies so this might take a while plz b patient. pls.",getChannel(data))
 									try:
 										newsSummary,newsTitle = readingIsFun(newsurl)
 									except Exception as e:
@@ -2360,6 +2388,7 @@ def main(joined):
 								continue
 							else:
 								pass
+
 						try:
 							if newsSummary is not None:
 								if len(newsSummary) < SUMMARY_COUNT: continue
@@ -2444,6 +2473,13 @@ def main(joined):
 						pass
 				con.db.commit()
 				#-- END MEMO
+
+				#--
+				# Let's log when the active user was last seen
+				if len(memnick) > 0 and memnick != botname:
+					q.execute("""
+						INSERT OR REPLACE INTO LastSeen(User,Time,Channel,Msg) VALUES (?, ?, ?, ?)""", (memnick, time.time(), getChannel(data), getMessage(data)))
+					con.db.commit()
 
 				# Now let's see if someone wants a ping when someone else is alive in chat.
 			

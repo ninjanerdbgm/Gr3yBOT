@@ -2,6 +2,8 @@
 
 from gr3ybot_settings import SUMMARY_COUNT
 from urldetect import *
+from urlparse import urlparse
+import zlib
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
@@ -43,15 +45,24 @@ def getBaseScore(text,title):
 		cleanedSent = [w for w in sentence if w not in ignoredWords]
 		cleanBody.append(" ".join(cleanedSent))
 	i = 0
-	freqWords = getWordFrequency(body)
+	freqWords = getWordFrequency(cleanBody)
 	for sentence in cleanBody:
 		sentence = sentence.split(' ')
+		if "==" in sentence: continue # Attempt to skip code blocks
 		cnt = 0
 		wordlen = 0
 		freq = 0
+		num = 0
+		impWords = 0
 		for word in sentence:
-			if word in freqWords[:50]: freq += 1
+			if word in freqWords[:30]: freq += 1
+			if word in freqWords[-30:]: impWords += 1
 			if word in title: cnt += 1
+			try:
+				if int(word.replace(",", "").replace(".", "").replace("$", "")) > 0: num += 1
+				if word.find("illion") or word in ["one","two","three","four","five","six","seven","eight","nine","ten"]: num += 1
+			except:
+				pass
 			wordlen += len(word)
 		#--
 		# Here is where I determine the strength of the sentence. This is broken down into 
@@ -62,11 +73,19 @@ def getBaseScore(text,title):
 		#	Multiply that by 8.
 		sharedWords = (cnt * 8)
 		# Next, how many common important words does the sentence have?  
-		#	Multiply that by 5.
-		frequentWords = (freq * 5)
+		#	Multiply that by 6.
+		frequentWords = (freq * 6)
+		# Next, let's try to determine how many infrequent words were used.
+		#	Multiply that by 4
+		importantWords = (impWords * 4)
 		# Next, how many proper nounds does the sentence contain?
 		#	Multiply that by 5.
 		propNouns = (props * 5)
+		# Finally, let's see how many numbers are in the sentence.  Numbers 
+		#	indicate years or statistics, so those sentences should
+		#	be rated higher.
+		#	Multiply that by 8
+		statWords = (num * 8)
 		#--
 		# Estimations
 		#
@@ -82,7 +101,7 @@ def getBaseScore(text,title):
 		#	Divide that by 7.
 		sentenceLen = int((len(sentence) / 7))
 		# Add that all together to get the strength score of the sentence:
-		scores[i] = sharedWords + propNouns + frequentWords + averageLen + sentenceLen
+		scores[i] = sharedWords + propNouns + frequentWords + importantWords + statWords + averageLen + sentenceLen
 		i+=1
 	return scores
 			
@@ -108,7 +127,7 @@ def summary(title, text):
 	
 
 def whoHasTimeToRead(url):
-	is_article = valid_url(url)
+	is_article = valid_url(url, verbose=True)
 	if is_article:
 		sumitup = {}
 		g = Goose({'enable_image_fetching':False})
@@ -125,9 +144,8 @@ def readingIsFun(url):
 	g = Goose({'enable_image_fetching':False})
 	yummy = CookieJar()
 	cookieSesh = urllib2.build_opener(urllib2.HTTPCookieProcessor(yummy))
-	top_level = re.match(r'^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n]+)',url)
-	cookieSesh.open(top_level.group())
 	raw_html = cookieSesh.open(url).read()
+	raw_html = zlib.decompress(raw_html, 16 + zlib.MAX_WBITS)
 	b = g.extract(url=url, raw_html=raw_html)
 	sumNews = summary(b.title, b.cleaned_text)
 	sumTitle = b.title

@@ -28,7 +28,7 @@ BAD_CHUNKS = ['careers', 'contact', 'about', 'faq', 'terms', 'privacy',
               'advert', 'preferences', 'feedback', 'info', 'browse', 'howto',
               'account', 'subscribe', 'donate', 'shop', 'admin']
 
-BAD_DOMAINS = ['amazon', 'doubleclick', 'twitter']
+BAD_DOMAINS = ['amazon', 'doubleclick', 'twitter', 'github', 'reddit']
 
 def remove_args(url, keep_params=(), frags=False):
     """
@@ -127,6 +127,7 @@ def valid_url(url, verbose=False, test=False):
     if test:
         url = prepare_url(url)
 
+
     # 11 chars is shortest valid url length, eg: http://x.co
     if url is None or len(url) < 11:
         if verbose: print('\t%s rejected because len of url is less than 11' % url)
@@ -188,7 +189,7 @@ def valid_url(url, verbose=False, test=False):
         underscore_count = url_slug.count('_')
 
     # If the url has a news slug title
-    if url_slug and (dash_count > 4 or underscore_count > 4):
+    if url_slug and (dash_count > 4 or underscore_count > 4 or dash_count + underscore_count > 4):
 
         if dash_count >= underscore_count:
             if tld not in [ x.lower() for x in url_slug.split('-') ]:
@@ -241,6 +242,7 @@ def url_to_filetype(abs_url):
     path_chunks = [x for x in path.split('/') if len(x) > 0]
     last_chunk = path_chunks[-1].split('.')  # last chunk == file usually
     file_type = last_chunk[-1] if len(last_chunk) >= 2 else None
+    if file_type not in ALLOWED_TYPES and int(file_type) > 0: file_type = None
     return file_type or None
 
 def get_domain(abs_url, **kwargs):

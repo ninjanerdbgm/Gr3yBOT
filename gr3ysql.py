@@ -29,7 +29,17 @@ class Gr3ySQL(object):
 							text TEXT COLLATE NOCASE
 						)
 			""")
-			
+		
+			# Last Seen
+			create.execute("""
+					CREATE TABLE IF NOT EXISTS
+						LastSeen (
+							User VARCHAR(12) PRIMARY KEY COLLATE NOCASE,
+							Time INTEGER,
+							Channel VARCHAR(20),
+							Msg TEXT COLLATE NOCASE
+						)
+			""")			
 	
 			# Fighting Equipment List
 			create.execute("""
