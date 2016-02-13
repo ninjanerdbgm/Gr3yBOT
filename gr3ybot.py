@@ -284,18 +284,18 @@ def strTranslate(text):
 	text = str(text).translate(None, "\r\n")
 	return text
 
-def makeBotText(text):
-	text = str(text).translate(None, "'")
-	if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)) < 1:
-		text = str(text).translate(None, "?")
+def makeBotText(text, tell):
+	if not tell:
+		text = str(text).translate(None, "'")
+		if len(re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)) < 1:
+			text = str(text).translate(None, "?")
 	text = text.lower()
 	return text
 	
 def cleanText(text, tell=False):
 	if len(text) > 490: text = text[:485] + '[CUT]'
 	text = strTranslate(text)
-	if not tell:
-		text = makeBotText(text)
+	text = makeBotText(text, tell)
 	text = makeEncode(text)
 	return text
 
