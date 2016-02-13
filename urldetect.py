@@ -242,7 +242,7 @@ def url_to_filetype(abs_url):
     path_chunks = [x for x in path.split('/') if len(x) > 0]
     last_chunk = path_chunks[-1].split('.')  # last chunk == file usually
     file_type = last_chunk[-1] if len(last_chunk) >= 2 else None
-    if file_type not in ALLOWED_TYPES and int(file_type) > 0: file_type = None
+    if file_type and file_type is not None and file_type not in ALLOWED_TYPES and int(file_type) > 0: file_type = None
     return file_type or None
 
 def get_domain(abs_url, **kwargs):

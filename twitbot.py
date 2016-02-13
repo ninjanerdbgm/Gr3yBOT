@@ -63,6 +63,24 @@ def getTweet(user, checkids=None):
 		except TypeError:
 			return "-*501"
 
+def getTweetFromID(idnum=None):
+	try:
+		if idnum is None:
+			return False
+		else:
+			twt = twit.get_status(id=idnum)
+			usr = twt.user.screen_name
+			twt = twt.text
+		return usr,twt
+	except tweepy.error.TweepError as e:
+		if e.message == "Not Authorized":
+			return "~*501"
+		try:
+			if e.message[0]['code'] == 34:
+				return "~*404"
+		except TypeError:
+			return "~*501"
+
 def getTweetTest(user, checkids=None):
         try:
                 if user != 0:

@@ -2366,14 +2366,14 @@ def main(joined):
 						if not newsurl.startswith('http'):
 							newsurl = 'http://'+newsurl
 						try:
-							newsSummary,newsTitle = whoHasTimeToRead(newsurl)
+							newsSummary,newsTitle,hashtags = whoHasTimeToRead(newsurl)
 						except Exception as e:
 							if str(e).lower() == "too many values to unpack":
 								err = whoHasTimeToRead(newsurl)
 								if err == "~~HTTPS~~":
 									send("ima try to summarize this article but they want me to use cookies so this might take a while plz b patient. pls.",getChannel(data))
 									try:
-										newsSummary,newsTitle = readingIsFun(newsurl)
+										newsSummary,newsTitle,hashtags = readingIsFun(newsurl)
 									except Exception as e:
 										send("welp that site wouldnt let me read the news because it hates bots, so",getChannel(data))
 										if LOGLEVEL >= 1: log("Error getting news summary: {}".format(str(e)))
@@ -2394,10 +2394,10 @@ def main(joined):
 								if len(newsSummary) < SUMMARY_COUNT: continue
 								if LOGLEVEL >= 1: 
 									log("Found a news article!")
-									log("Title: {0}".format(newsTitle.encode('utf-8','ignore')))
+									log("Title: {0}, Related Hashtags: {1}".format(newsTitle.encode('utf-8','ignore'),", ".join(hashtags).replace(".","")))
 									log("Summary: {0}".format(" ".join(newsSummary).translate(None, "\t\r\n")))
 									try:
-										send("title: \"{0}\". here are the good bits:".format(newsTitle.lower().encode('utf-8','replace')),getChannel(data))
+										send("title: \"{0}\". related hashtags: \"{1}\".  heres the jist:".format(newsTitle.lower().encode('utf-8','replace'),", ".join(hashtags).replace(".","")),getChannel(data))
 									except Exception as e:
 										if LOGLEVEL >= 1: log("Error in displaying article title: {}".format(str(e)))
 										send("something about the title of this article is anti-bot. send this site an email and tell them to use utf-8 encoding.",getChannel(data))
@@ -2416,6 +2416,27 @@ def main(joined):
 							# Something went wrong.  Log it.
 							if LOGLEVEL >= 1: log("WARNING: {}".format(str(e)))
 				connected = connected + "ed Blad"
+				#--
+				# Let's try to get a posted twitter status...
+				#--
+				if TWITTER_LINKS:
+                                        findurl=re.compile("https?:\/\/twitter\.com\/(?:#!\/)?(\w+)\/status(es)?\/(\d+)")
+                                        for url in re.findall(findurl, data):
+                                                tid = url[2]
+                                                person,tweet = getTweetFromID(tid)
+						try:
+	                                         	if tweet == "~501":
+								send("that looks like a twitter url but i cant access prudish timelines",getChannel(data))
+								continue
+							elif tweet == "~404":
+								send("404 twitter not found",getChannel(data))
+								continue
+							else:
+								send("oh! a twitter!  heres what it says: @{0} >> {1}".format(person,tweet),getChannel(data),tell=True)
+								continue
+						except Exception as e:
+							if LOGLEVEL >= 1: log("ERROR: Couldn't fetch tweet: {}".format(str(e)))
+							continue
 				#-- 
 				# Below is the Gimli subroutine.
 				# It looks for two back-to-back instances of the word "and" beginning a sentence

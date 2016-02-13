@@ -91,14 +91,17 @@ FIGHTLOG = 'fightinfo.log'
 #	SUMMARY_COUNT
 #		If NEWS_LINKS is True, how many sentences do you want to generate
 #		for your summary?
-#	*_ENABLED
-#		Enable or disable the bot's various features.
-#		If you don't have developer API keys for Yelp, YouTube,
-#		Slack, Pastebin (Fight History), or Twitter, and don't 
-#		plan on getting any, then make sure to disable those features.
+#       TWITTER_LINKS
+#               Set to True if you'd like the bot to attempt to automatically
+#               fetch twitter statuses from urls posted in chat.  Requires
+#               that Twitter API Keys be set.
+#       *_ENABLED
+#               Enable or disable the bot's various features.
+#               If you don't have developer API keys for Yelp, YouTube,
 YOUTUBE_LINKS = True
 NEWS_LINKS = True
 SUMMARY_COUNT = 3
+TWITTER_LINKS = True
 TWITTER_ENABLED = True
 YELP_ENABLED = True
 PING_ENABLED = True
