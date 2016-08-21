@@ -12,7 +12,7 @@ BETA_MODE = False;
 timeformat = "%m/%d/%y %H:%M:%S"
 
 ## The following are your irc settings
-server = 'localhost'
+server = ''
 port = 6667
 channelpw = ''
 botname = 'GreyBot_BETAR' if BETA_MODE else 'GreyBot' 
@@ -295,7 +295,7 @@ WOLFRAM_KEY = ''
 #====================================================================================================###
 # All finished?  If so, set the following variable to True:
 
-CONFIGURED = True
+CONFIGURED = False
 
 #
 #====================================================================================================###
