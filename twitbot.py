@@ -4,7 +4,6 @@ from gr3ybot_settings import TWIT_CONSUMER_KEY,TWIT_CONSUMER_SECRET,TWIT_ACCESS_
 from gr3ysql import Gr3ySQL
 import time
 import tweepy
-from tweepy import OAuthHandler
 import sys
 import json
 import random
@@ -14,7 +13,7 @@ if __name__ == '__main__':
 	print "This can't be run on its own!"
 	sys.exit()
 
-auth = OAuthHandler(TWIT_CONSUMER_KEY,TWIT_CONSUMER_SECRET)
+auth = tweepy.OAuthHandler(TWIT_CONSUMER_KEY,TWIT_CONSUMER_SECRET)
 auth.set_access_token(TWIT_ACCESS_KEY,TWIT_ACCESS_SECRET)
 
 twit = tweepy.API(auth)

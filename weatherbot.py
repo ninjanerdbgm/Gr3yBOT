@@ -2,13 +2,11 @@
 # coding=utf8
 
 from __future__ import unicode_literals
-
-import requests
+from gr3ybot_settings import WEATHER_API_KEY
 from bs4 import BeautifulSoup
 import feedparser
-import re
 import sys
-import urllib, urllib2
+import requests
 
 if __name__ == "__main__":
 	print "What are you doing?  Why are you doing this?"
@@ -48,71 +46,95 @@ def getWindDirection(wind):
         if wind >= 326.25 and wind < 348.75:
                 return "north-northwest"
 
+def getForecast(loc):
+	weathers,timesFrom,timesTo,wtypes,precips,temps,wspeednames,wdirs,wspeeds = [[] for i in range(9)]
+	loc = loc.replace('%','%25')
+	loc = loc.split(' ')
+	loc = '%20'.join(loc)
+	url = 'http://api.openweathermap.org/data/2.5/forecast?q={0}&APPID={1}&mode=xml&units=imperial&cnt=3'.format(loc,WEATHER_API_KEY)
+	try:
+		xml = requests.get(url)
+	except:
+		return "~*404"
+	xml = BeautifulSoup(xml.text, "lxml")
+	location = xml.weatherdata.findAll("location")[0].findAll("name")[0]
+	forecast = xml.weatherdata.findAll("forecast")[0]
+	for i in forecast.findAll("time"):
+		timesFrom.append(i["from"])
+		timesTo.append(i["to"])
+	for i in forecast.findAll("temperature"):
+		temps.append(i["value"])
+	for i in forecast.findAll("precipitation"):
+		try:
+			precips.append(" (" + i["value"] + "mm)")
+		except KeyError:
+			precips.append("none")
+	for i in forecast.findAll("symbol"):
+		wtypes.append(i["name"])
+	for i in forecast.findAll("windspeed"):
+		wspeednames.append(i["name"])
+		wspeeds.append(round(float(i["mps"]) * 2.23694,2))
+	for i in forecast.findAll("winddirection"):
+		wdirs.append(getWindDirection(float(i["deg"])))
+	for i in range(3):
+		weathers.append([timesFrom[i],timesTo[i],wtypes[i],precips[i] if precips[i] != "none" else "",temps[i],wspeednames[i],wdirs[i],wspeeds[i],location])
+	return weathers
+
 def getWeather(loc):
 	weather = {}
 	loc = loc.replace('%','%25')
 	loc = loc.split(' ')
 	loc = "%20".join(loc)
-	# Let's get the Where On Earth ID...
-	url = 'http://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20geo.places%20where%20text=%22{0}%22'.format(loc)
-	r = requests.get(url)
-	soup = BeautifulSoup(r.content, 'lxml')
-	for breaks in soup.find_all('br'):
-		breaks.extract()
-	try:
-		woeid = soup.find("woeid").text
-	except:
-		return "~*404"
-	# Done
 	# Now let's get the weather...
-	url = 'http://weather.yahooapis.com/forecastrss?w={0}'.format(woeid)
+	url = 'http://api.openweathermap.org/data/2.5/weather?q={0}&APPID={1}&mode=xml&units=imperial'.format(loc,WEATHER_API_KEY)
 	parsed = feedparser.parse(url)
-	parsed_loc = parsed['feed']['title']
-	parsed_loc = parsed_loc.replace('Yahoo! Weather - ','')
-	parsed_loc = parsed_loc.lower()
+	parsed = parsed['feed']
 	try:
-                parsed_clouds = parsed.entries[0]['yweather_condition']
-                parsed_clouds = parsed_clouds['text'].lower()
+		parsed_loc = parsed['city']['name']
+	except:
+		parsed_loc = "i broke something"
+	try:
+                parsed_clouds = parsed['clouds']
+                parsed_clouds = parsed_clouds['name'].lower()
         except KeyError:
                 parsed_clouds = "weather"
         try:
-                parsed_temp = parsed.entries[0]['yweather_condition']
-                parsed_temp = int(parsed_temp['temp'])
+                parsed_temp = parsed['temperature']['value']
         except (KeyError, ValueError):
                 parsed_temp = "a temperature in degrees"
         try:
-                parsed_humidity = parsed['feed']['yweather_atmosphere']['humidity']
+                parsed_humidity = parsed['humidity']['value']
         except (KeyError, ValueError):
                 parsed_humidity = "some "
         try:
-                parsed_pressure = parsed['feed']['yweather_atmosphere']['pressure']
+                parsed_pressure = parsed['pressure']['value']
+		parsed_pressure = str(round(float(parsed_pressure) * 0.000145038,2))  + 'psi'
         except (KeyError, ValueError):
                 parsed_pressure = "at least 0"
         try:
-                parsed_visibility = parsed['feed']['yweather_atmosphere']['visibility']
+                parsed_precip = parsed['precipitation']['mode']
+		parsed_pamt = '0'
+		if parsed_precip != 'no':
+			parsed_pamt = parsed['precipitation']['value']
+		else: parsed_precip = parsed_precip + 'ne'
         except (KeyError, ValueError):
-                parsed_visibility = "some crazy number of"
+                parsed_precip = "some crazy number of"
         try:
-                parsed_sunrise = parsed['feed']['yweather_astronomy']['sunrise'].lower()
-                if len(parsed_sunrise) < 4: parsed_sunrise = "sometime in the morning, i think,"
+                parsed_sunrise = parsed['sun']['rise']
         except (KeyError, ValueError):
                 parsed_sunrise = "sometime in the morning, i think,"
         try:
-                parsed_sunset = parsed['feed']['yweather_astronomy']['sunset'].lower()
+                parsed_sunset = parsed['sun']['set']
                 if len(parsed_sunset) < 4: parsed_sunset = "just before night"
         except (KeyError, ValueError):
                 parsed_sunset = "just before night"
         try:
-                parsed_wind_chill = parsed['feed']['yweather_wind']['chill']
-        except (KeyError, ValueError):
-                parsed_wind_chill = "another temperature in degrees"
-        try:
-                parsed_wind_speed = parsed['feed']['yweather_wind']['speed']
+                parsed_wind_speed = parsed['speed']['value']
+		parsed_wind_speed = round(float(parsed_wind_speed) * 2.23694,2)
         except (KeyError, ValueError):
                 parsed_wind_speed = "an unknown speed in"
         try:
-                parsed_wind_direction = float(parsed['feed']['yweather_wind']['direction'])
-                parsed_wind_direction = getWindDirection(parsed_wind_direction)
+                parsed_wind_direction = getWindDirection(int(parsed['direction']['value']))
         except (KeyError, ValueError):
                 parsed_wind_direction = "some direction"
 
@@ -121,10 +143,10 @@ def getWeather(loc):
         weather['temp'] = parsed_temp
         weather['humidity'] = parsed_humidity
         weather['pressure'] = parsed_pressure
-        weather['visibility'] = parsed_visibility
+        weather['visibility'] = parsed_precip
         weather['sunrise'] = parsed_sunrise
         weather['sunset'] = parsed_sunset
-        weather['windchill'] = parsed_wind_chill
+        weather['windchill'] = '({0}%)'.format(parsed_pamt)
         weather['windspeed'] = parsed_wind_speed
         weather['winddirection'] = parsed_wind_direction
 	

@@ -35,39 +35,30 @@
 from gr3ybot_settings import *
 from gr3ysql import Gr3ySQL
 from chatterbotapi import ChatterBotFactory, ChatterBotType
-import struct
+from fightbot import *
 from difflib import SequenceMatcher
-from bottube import *
-import socket
-import select
-import string
-from urbandict import *
-import sys
-from twitbot import *
-from slackbot import *
-from yelpbot import *
-from weatherbot import *
-from summarize import *
 from confessions import *
 from os import path
-import random
-import signal
-import parsedatetime as pdt
+from decimal import *
 from time import sleep, strftime, localtime
-import threading
-import urllib
-import urllib2
-import urlparse
-import json
 from pytz import timezone
-import pytz
-from wiki import wiki
-import datetime
-import feedparser
-import re
+import socket, struct, select, string
+import sys, random, math, signal
+import threading, urllib, urllib2, urlparse
+import json, pytz, datetime, feedparser, re
+import parsedatetime as pdt
+if YOUTUBE_LINKS: from bottube import *
+if URBANDICT_ENABLED: from urbandict import *
+if GOOGLE_ENABLED: from googlebot import *
+if TWITTER_ENABLED: from twitbot import *
+if TWITCH_NOTIFICATIONS_ENABLED: from twitchbot import getIsTwitchStreaming
+if SLACK_ENABLED: from slackbot import *
+if YELP_ENABLED: from yelpbot import *
+if WEATHER_ENABLED: from weatherbot import *
+if NEWS_LINKS: from summarize import *
+if WIKIPEDIA_ENABLED: from wiki import wiki
 if QR_ENABLED: import qrtools
-from fightbot import *
-from wolfbot import *
+if WOLFRAM_ENABLED: from wolfbot import *
 
 #-- Version, and AI initialization, and variables
 random.seed()
@@ -101,14 +92,16 @@ f.close()
 
 #-- Set botname match string and connect to IRC
 matchbot = botname.lower()
-def connect():
+def setSocket():
 	global irc
-	irc = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
+	(fam, socktype, protocol, j, address) = socket.getaddrinfo(server, port)[0]
+	irc = socket.socket (fam, socktype, protocol)
+	irc.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+	irc.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, 1)
+	irc.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, 1)
+	irc.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, 5)
 	print "Connecting to {0}:{1}".format(server,port)
 	irc.connect((server,port))
-	#irc.setblocking(False)
-	#irc.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
-
 	if len(channelpw) > 1:
 		irc.send ( 'PASS {0} \r\n'.format(channelpw) )
 	print "Setting nickname to {0}...".format(botname)
@@ -212,6 +205,11 @@ def getHost(host):
 	host = host.split(' ')[0]
 	return host
 
+def utc2loc(utctime):
+	utct = datetime.datetime.strptime(utctime,'%Y-%m-%dT%H:%M:%S')
+	localDt = utct.replace(tzinfo=pytz.utc).astimezone(timezone(LOCALTZ))
+	return timezone(LOCALTZ).normalize(localDt)
+
 def getChannel(data):
 	try:
 		chan = data.split('#')[1]
@@ -241,7 +239,7 @@ def getChatters(rawdata="",chan=channel):
 			names = data.split('353')[1]
 			names = names.split(':')[1]
 			names = names.split(' ')
-			names = [i.strip('@').strip('\r\n') for i in names]
+			names = [i.replace('@', "").replace("~","").strip('\r\n') for i in names]
 			try:
 				names.remove(botname)
 			except ValueError: names = names
@@ -249,6 +247,8 @@ def getChatters(rawdata="",chan=channel):
 				log("People in the channel:")
 				for i in names:
 					log(i)
+	if names == False or names is None:
+		return "lonely"
 	if len(names) == 1:
 		return "lonely"
 	return names
@@ -307,12 +307,12 @@ def bufferData(data):
 
 def getMessage(data):
 	try:
-		msg = data.split('#')[1]
+		msg = data.split('#',1)[1]
 	except IndexError:
 		msg = None
 
 	if msg is not None:
-		msg = msg.split(':')[1:]
+		msg = msg.split(':',1)[1:]
 		msg = " ".join(msg)
 	return msg
 
@@ -331,7 +331,10 @@ def join(chan):
 def quit(chan):
 	irc.send('PART ' + chan + '\r\n')
 
-def send(msg,chan=channel,tell=False):
+def send(msg,chan=channel,tell=False,s=0,u=None):
+	if s == 1:
+		privsend(msg,u)
+		return
 	msg = cleanText(msg,tell)
 	if msg != False: irc.send('PRIVMSG ' + chan + ' :{0}\r\n'.format(msg))
 
@@ -468,21 +471,24 @@ def checkReminders(chan=channel):
 
 #-- Main Function
 def main(joined):
-	connect()
-	ircConnect = [irc,sys.stdin]
+	setSocket()
+	ident()
 	con.db.create_function("regexp", 2, regexp)
 	disconnected = 0
+	isStreaming = 0
 	joined = False
 	threshold = 15 * 60
 	lastPing = time.time()
 	readBuffer = ""
+	dataRetries = 3
 	while True:
+		time.sleep(0.05)
 		try:
 			if len(f) > 0: f.pop() # Flush data
 		except: pass
 		special = 0
 		action = 'none'
-		dataReady = select.select(ircConnect, [], [])
+		dataReady = select.select([irc], [], [], 10)
 		for s in dataReady[0]:
 			if s == sys.stdin:
 				k = sys.stdin.readline()
@@ -497,6 +503,7 @@ def main(joined):
 							tellinghistory = 0
 							time.sleep(1)
 							irc.send('PONG ' + raw.split()[1] + '\r\n')
+							dataRetries = 3
 							if LOGLEVEL >= 1: log("Sent a ping response.")
 							pingActions(getChannel(raw))
 						except Exception as e:
@@ -510,7 +517,12 @@ def main(joined):
 					print str(e)
 					continue
 		connected = "Thu"
-		if (time.time() - lastPing) > threshold and len(raw) == 0:
+		#if (time.time() - lastPing) > threshold and len(raw) == 0:
+		if len(raw) == 0 and dataRetries > 0:
+			time.sleep(5)
+			if LOGLEVEL >= 1: log("Lost connection. Awaiting reply from server...")
+			dataRetries = dataRetries - 1
+		if len(raw) == 0 and dataRetries <= 0:
 			if LOGLEVEL >= 1: 
 				log("\n============================================\nFATAL ERROR:\n============================================")
 				log("The bot has been disconnected from the server.  Reconnecting...")
@@ -522,7 +534,9 @@ def main(joined):
 				log("Could not send ping to bgm for reason: {}".format(str(e)))
 			disconnected=True
 			irc.close()
-			connect()
+			setSocket()
+			ident()
+			#sys.exit()
 
 		for data in f:
 			if LOGLEVEL == 3: 
@@ -612,6 +626,21 @@ def main(joined):
 						###===================================###					
 		
 						#--
+						# IDENT COMMAND
+						if info[0].lower() == 'ident' and special == 0:
+							nick = getNick(data)
+							host = getHost(data)
+							status = admins(nick, host)
+							if status == 1:
+								ident()
+								continue
+							elif status == 2:
+								send("i mean, you look like an admin but can you identify like an admin",getChannel(data))
+								continue
+							else:
+								send("you dont know what youre talking about",getChannel(data))
+								continue
+
 						# OPER COMMAND
 						if info[0].lower() == 'op' and special == 0:
 							nick = getNick(data)
@@ -645,7 +674,7 @@ def main(joined):
 							if "".join(info[1]).rstrip().lower() == botname.lower():
 								send("nah",getChannel(data))
 								continue
-							reason = "".join(info[2:]).rstrip()
+							reason = " ".join(info[2:]).rstrip()
 							if not reason or reason is None:
 								reason = "sorry i hit the wrong key and now youve been kicked"
 							if status == 1:
@@ -833,6 +862,39 @@ def main(joined):
 							if special == 0: send("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),getChannel(data))
 							else: name = getNick(data); privsend("Gr3yBOT by bgm: version {0}. You know you wanna fork me: https://github.com/ninjanerdbgm/Gr3yBOT".format(version),name)
 							if LOGLEVEL >= 1: log("Version: {0}".format(version))
+
+						# BIRTHDAY PROBLEM
+						if info[0].lower() == 'room':
+							try:
+								roomSize = info[1]
+								roomSize = math.ceil(float(roomSize))
+							except:
+								send("yo u gotta tell me how many people are in the room tho. \"%room 10\" for example",getChannel(data))
+								continue
+							if roomSize <= 0:
+								send("hah look at this friendless loser",getChannel(data))
+								continue
+			
+							if roomSize > 365:
+								send("there is a 100% chance that two people share a birthday. go make friends",getChannel(data))
+								continue
+
+							if roomSize > 80:
+								send("theres a 99.99% chance that two people share a birthday. go make friends",getChannel(data))
+								continue
+							try:
+								a = Decimal(math.factorial(366))
+								b = Decimal(366 ** roomSize)
+								c = Decimal(math.factorial(366 - roomSize))
+								bday = 1 - (a / (b * c))
+							except:
+								send("nobody has that many friends.")
+								continue
+			
+							if bday > 1: bday = 1
+							send("theres a {0}% chance that two people share a birthday. go make friends".format(format(bday * 100, '.2f')),getChannel(data))
+							continue
+							
 						# SYNSHOP COMMAND
 						if info[0].lower() == 'synshop':
 							nick = getNick(data)
@@ -979,7 +1041,7 @@ def main(joined):
 								continue
 							if example is None:
 								if LOGLEVEL >= 1: log("Nothing Found.")
-								send("aint nothing found. go away.",getChannel(data))
+								send("aint nothing found. go away.",getChannel(data),special,getNick(data))
 								continue
 							if special == 0:
 								try:
@@ -1001,12 +1063,15 @@ def main(joined):
 
 						# WEATHER
 						if info[0].lower() == 'weather':
+							if WEATHER_ENABLED == False:
+								continue
+							usernick = getNick(data)
 							degrees = 'F'
 							try:
 								where = info[1:]
 							except IndexError:
 								if special == 0: send("the weather of space is cold and dark",getChannel(data))
-								else: usernick = getNick(data); privsend("the weather of space is cold and dark",usernick)
+								else: privsend("the weather of space is cold and dark",usernick)
 								continue
 							where = " ".join(where)
 							where = "".join(c for c in where if c not in ('\n','\r','\t'))
@@ -1014,13 +1079,52 @@ def main(joined):
 							weather = getWeather(where)
 							if weather == "~*404" or weather is None:
 								if special == 0: send("i dont know where dat iz",getChannel(data))
-								else: usernick = getNick(data); privsend("i dont know where dat iz",usernick)
+								else: privsend("i dont know where dat iz",usernick)
 								if LOGLEVEL >= 1: log("Nothing found.")
 								continue
 							if special == 0:
+								local = timezone(LOCALTZ)
 								send("weather for {0}:".format(weather['location']),getChannel(data))
-								send("currently {0} at {1}{2} (feels like {6}{2}). visibility is at {5} miles. humidity is currently {3}%, with an atmospheric pressure of {4}psi".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']),getChannel(data))
-								send("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],weather['sunrise'],weather['sunset']),getChannel(data))
+								send("currently {0} at {1}{2}. precipitation: {5} {6}. humidity is currently {3}%, with an atmospheric pressure of {4}".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']),getChannel(data))
+								send("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],utc2loc(weather['sunrise']).strftime("%I:%M%p"),utc2loc(weather['sunset']).strftime('%I:%M%p')),getChannel(data))
+							elif special == 1:
+								local = timezone(LOCALTZ)
+                                                                privsend("weather for {0}:".format(weather['location']),usernick)
+                                                                privsend("currently {0} at {1}{2}. precipitation: {5} {6}. humidity is currently {3}%, with an atmospheric pressure of {4}".format(weather['cloudcover'],weather['temp'],degrees,weather['humidity'],weather['pressure'],weather['visibility'],weather['windchill']),usernick)
+                                                                privsend("wind is blowing {0} at {1}mph. sunrise today is at {2} and sunset is at {3}".format(weather['winddirection'],weather['windspeed'],utc2loc(weather['sunrise']).strftime("%I:%M%p"),utc2loc(weather['sunset']).strftime('%I:%M%p')),usernick)
+
+						# FORECAST
+						if info[0].lower() == 'forecast':
+							if WEATHER_ENABLED == False:
+								continue
+							usernick = getNick(data)
+							degrees = 'F'
+							try:
+								where = info[1:]
+							except IndexError:
+								if special == 0: send("i see a shitstorm in your future",getChannel(data))
+								else: privsend("i see a shitstorm in your future",usernick)
+								continue
+							where = " ".join(where)
+							where = "".join(c for c in where if c not in ('\n','\r','\t'))
+							if len(where) < 2: 
+								if special == 0: send("i see a shitstorm in your future",getChannel(data))
+                                                                else: privsend("i see a shitstorm in your future",usernick)
+                                                                continue
+							if LOGLEVEL >= 1: log("Get forecast for {0}".format(where))
+							forecast = getForecast(where)
+							if forecast == "~*404":
+								send("i dunno go look outside dumby",getChannel(data))
+								continue
+							loc = str(forecast[0][8])
+							loc = loc.replace("<name>","").replace("</name>","")
+							if LOGLEVEL >= 1: log("Sent weather for {0} to {1}".format(loc,usernick))
+							if special == 0: send("forecast for {0}".format(loc),getChannel(data))
+							if special == 1: privsend("forecast for {0}".format(loc),usernick)
+							for i in forecast:
+								if special == 0: send("from {0} to {1} (PST) you can expect {2}{3}. temperature will be {4}{5} with a {6} coming from the {7} at {8}mph.".format(utc2loc(i[0]).strftime('%I:%M%p'),utc2loc(i[1]).strftime('%I:%M%p'),i[2],i[3],i[4],degrees,i[5],i[6],i[7]),getChannel(data))
+								else: privsend("from {0} to {1} (PST) you can expect {2}{3}. temperature will be {4}{5} with a {6} coming from the {7} at {8}mph.".format(utc2loc(i[0]).strftime('%I:%M%p'),utc2loc(i[1]).strftime('%I:%M%p'),i[2],i[3],i[4],degrees,i[5],i[6],i[7]),usernick)
+									
 
 						# WOLFRAM ALPHA
 						if info[0].lower() == 'calc':
@@ -1099,7 +1203,9 @@ def main(joined):
 									privsend("  ===  ==  = <location> is optional (default is las vegas), and can be a city, state or a zip code.",name)
 								if WIKIPEDIA_ENABLED: privsend("%wiki/%wikipedia/%lookup/%search <string> -=- search wikipedia for <string> and return a quick summary.", name)
 								if URBANDICT_ENABLED: privsend("%define <word(s)> -=- define stuff from urbandictionary.", name)
-								privsend("%weather <location> -=- get the weather forecast for <location>", name)
+								if WEATHER_ENABLED:
+									privsend("%weather <location> -=- get the current weather for <location>", name)
+									privsend("%forecast <location> -=- get the weather forecast for <location>", name)
 								if QR_ENABLED: privsend("%qr <url> -=- supply a url to a qr code image and ill try to see what it says",name)
 								privsend(" ", name)
 								time.sleep(.5)
@@ -1188,6 +1294,7 @@ def main(joined):
 							try:
 								message = " ".join(message[1:])
 								message = message.translate(None, "\t\r\n")
+								message = message.encode("utf-8")
 							except IndexError:
 								send("{0} get some %help.  actually, learn to read first, then get some %help.".format(fromnick),getChannel(data))
 								time.sleep(.1)
@@ -1198,11 +1305,50 @@ def main(joined):
 								continue
 							q = con.db.cursor()
 							q.execute("""
-								INSERT INTO Memos (fromUser,toUser,message,dateTime) VALUES (?, ?, ?, ?) """, (fromnick,tellnick,message,time.time()))
+								INSERT INTO Memos (fromUser,toUser,message,dateTime) VALUES (?, ?, ?, ?) """, (fromnick,tellnick,unicode(message),time.time()))
 							con.db.commit()
 							if LOGLEVEL >= 1: log("{0} says \"Tell {1} {2}\"".format(fromnick, tellnick, message))
 							send("ok ill tell {0} that you hate everything about them forever.".format(tellnick),getChannel(data))
 		
+						# GOOGLE SEARCH
+						if info[0].lower() == 'g' and GOOGLE_ENABLED:
+							try:
+								term = info[1:]
+							except:
+								continue
+							term = " ".join(term)
+							term = "".join(c for c in term if c not in ('\n','\r','\t')).split(" ")
+							if len(term) == 0:
+								# ADD QUIP HERE
+								continue
+							send("sec",getChannel(data),s=special,u=getNick(data))
+							if "-f" in term or "-first" in term:
+								term = " ".join(w for w in term if (w != "-f" and w != "-first"))
+								res = retFirstResult(term)
+								if res == "~*403":
+									send("how about you google {0} for yourself".format(term),getChannel(data),s=special,u=getNick(data))
+									continue
+								send("first result: '{0}' -- {1}".format(res["title"],res["url"]),getChannel(data),s=special,u=getNick(data))
+								if len(res["blob"]) > 0:									
+									send("'{0}'".format(res["blob"][:490]),getChannel(data),s=special,u=getNick(data))						
+							elif "-r" in term or "-random" in term or "-rand" in term:
+								term = " ".join(w for w in term if (w != "-r" and w != "-random" and w != "-rand"))
+                                                                res = retRandomResult(term)
+                                                                if res == "~*403":
+                                                                        send("how about you google {0} for yourself".format(term),getChannel(data),s=special,u=getNick(data))
+                                                                        continue
+                                                                send("i randomly gave you result number {2}: '{0}' -- {1}".format(res["title"],res["url"],res["resNum"]),getChannel(data),s=special,u=getNick(data))
+                                                                if len(res["blob"]) > 0:
+                                                                        send("'{0}'".format(res["blob"][:490]),getChannel(data),s=special,u=getNick(data))	
+							else:
+								term = " ".join(w for w in term)
+								res = retResults(term)
+								if res == "~*403":
+									send("how about you google {0} for yourself".format(term),getChannel(data),s=special,u=getNick(data))
+									continue
+								for i in res:
+									send("'{0}' -- {1}".format(res[i]["title"],res[i]["url"]),getChannel(data),s=special,u=getNick(data))
+				
 						# ROLL DICE
 						if info[0].lower() == 'roll':
 							try:
@@ -1277,7 +1423,6 @@ def main(joined):
 									if LOGLEVEL >= 1: log("Tweepy error: {0}".format(str(e)))
 									sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 									if e.message[0]['code'] == 88:
-										print "rate limit: {0}".format(getRateLimit())
 										send("im making too many calls to twitter and the twitter hates when i do that.  try again later.",getChannel(data))
 									continue
 								send("lets see what one of my followers, {0}, is doing on twitter...".format(fol),getChannel(data))
@@ -1296,9 +1441,9 @@ def main(joined):
 									if LOGLEVEL >= 1: log("@{0} >> {1}".format(fol,mag))
 									send("follow {} to get your tweets in here".format(twittername),getChannel(data))
 								continue
-							tweetnick = "".join(c for c in tweetnick if c not in ('\r', '\n', '\t')) # Strip any weird formatting in the user name.  Yes, this is a thing that happens.
+							tweetnick = "".join(c for c in tweetnick if c not in ('@','\r', '\n', '\t')) # Strip any weird formatting in the user name.  Yes, this is a thing that happens.
 							msg = getTweet(tweetnick)
-							if LOGLEVEL >= 1: log("Twitter Handle: {0}".format(tweetnick))
+							if LOGLEVEL >= 1: log("Twitter Handle: @{0}".format(tweetnick))
 							if msg == "-*404":
 								send("that person doesnt really exist tho",getChannel(data))
 								if LOGLEVEL >= 1: log("Doesn't Exist")
@@ -1467,13 +1612,14 @@ def main(joined):
 
 						# LAST SEEN
 						if (info[0].lower() == 'seen'):
+							actChan = getChannel(data)
 							try:
 								who = info[1].rstrip()
 							except:
-								send("you gotta specify a name sister",getChannel(data))
+								send("you gotta specify a name sister",actChan)
 								continue
 							if who.lower() == botname.lower():
-								send("im here now",getChannel(data))
+								send("im here now",actChan)
 								continue
 							q = con.db.cursor()
 							q.execute("""
@@ -1481,26 +1627,36 @@ def main(joined):
 							ls = q.fetchone()
 							try:
 								localnow = datetime.datetime.now(timezone(LOCALTZ))
-								send("i think i saw {0} active in {1} around {2} at {3}".format(who,ls[1].rstrip(),datetime.datetime.fromtimestamp(ls[0]).strftime("%b %d"),datetime.datetime.fromtimestamp(ls[0]).strftime("%-I:%M %p"),getChannel(data)))
-								send("iirc, they said: {0}".format(ls[2]),getChannel(data))
+								send("i think i saw {0} active in {1} around {2} at {3}".format(who,ls[1].rstrip(),datetime.datetime.fromtimestamp(ls[0]).strftime("%b %d"),datetime.datetime.fromtimestamp(ls[0]).strftime("%-I:%M %p")),actChan)
+								send("iirc, they said: {0}".format(ls[2]),actChan)
 								continue
 							except:
-								send("i havent seen that bro(ette) yet.",getChannel(data))
+								send("i havent seen that bro(ette) yet.",actChan)
 								continue
 	
 						# PING
 						if info[0].lower() == 'ping' and PING_ENABLED:
-							if special == 1: name = getNick(data); privsend("you can only ping someone from a public channel.  try this in {0}".format(channel),name); continue
 							try:
 								touser = info[1]
 							except:
-								send("ping who now?",getChannel(data))
+								send("ping who now?",getChannel(data),False,special,getNick(data))
 								continue
 							touser = touser.strip('@')
 							touser = touser.translate(None, "\t\r\n")
 							if touser.lower() == "me":
 								touser = getNick(data)
-							channicks = getChatters(chan=getChannel(data))
+							if special == 1:
+								for thing in info[2:]:						
+									if thing[0] == "#":
+										channicks = getChatters(chan=thing)
+										info.remove(thing)
+								try:
+									channicks
+								except:
+									privsend("what channel tho",getNick(data))
+									continue
+							else:
+								channicks = getChatters(chan=getChannel(data))
 							for i in channicks:
 								if touser.lower() in i.lower(): touser = i
 							try:
@@ -1511,7 +1667,7 @@ def main(joined):
 							q = con.db.cursor()
 							if msg.split(' ')[0].lower() == "when" and (" ".join(msg.split(' ')[2:]).lower() == "is alive" or msg.split(' ')[2].lower() == "joins"):
 								if msg.split(' ')[1] == touser or msg.split(' ')[1] == botname:
-									send("dont be dumn",getChannel(data))
+									send("dont be dumn",getChannel(data),False,special,getNick(data))
 									continue
 								else:
 									found = 0
@@ -1521,7 +1677,7 @@ def main(joined):
 									checkPing = q.fetchone()
 									try:
 										checkPing[0]
-										send("you already asked me to let you know when {0} stops being a chump.  go away".format(msg.split(' ')[1]),getChannel(data))
+										send("you already asked me to let you know when {0} stops being a chump.  go away".format(msg.split(' ')[1]),getChannel(data),False,special,getNick(data))
 										found = 1
 										continue
 									except:
@@ -1534,34 +1690,35 @@ def main(joined):
 											for i in channicks:
 												if (msg.split(' ')[1].translate(None, "\t\r\n").lower() in i.lower()) and found == 0:
 													q.execute("""
-														INSERT INTO Pings (toUser, checkUser) VALUES (?, ?) """, (touser, msg.split(' ')[1]))
+														INSERT INTO Pings (toUser, checkUser, quiet) VALUES (?, ?, ?) """, (touser, msg.split(' ')[1], special))
 													con.db.commit()
-													send("ok you got it boss",getChannel(data))
+													send("ok you got it boss",getChannel(data),False,special,getNick(data))
 													found = 1
 											if found == 0:
-												send("i dont know who dat is",getChannel(data))
+												send("i dont know who dat is",getChannel(data),False,special,getNick(data))
 										else:
 											channicks = getChatters(chan=getChannel(data))
 											found = 0
 											for i in channicks:
 												if msg.split(' ')[1].translate(None, "\t\r\n").lower() in i.lower():
-													send("that person already joined dumby. ill let you know when they arent idle instead",getChannel(data))
+													send("that person already joined dumby. ill let you know when they arent idle instead",getChannel(data),False,special,getNick(data))
 													found = 1
 											if found == 0:
-												send("ok you got it boss",getChannel(data))
+												send("ok you got it boss",getChannel(data),False,special,getNick(data))
 												q.execute("""
-                                                                                                                INSERT INTO Pings (toUser, checkUser) VALUES (?, ?) """, (touser, msg.split(' ')[1]))
+                                                                                                                INSERT INTO Pings (toUser, checkUser, quiet) VALUES (?, ?, ?) """, (touser, msg.split(' ')[1], special))
                                                                                                 con.db.commit()
 											else:
-												send("dont make me be the bad guy. you spam {0}s cell phone with your dumb requests.".format(touser),getChannel(data))
+												send("dont make me be the bad guy. you spam {0}s cell phone with your dumb requests.".format(touser),getChannel(data),False,special,getNick(data))
 							else:	
 								if not msg: msg = "alive?"
-								if LOGLEVEL >= 1: log("Ping request sent from: {0}, to: {1}, with this message: {2}".format(getNick(data),touser,msg))
 								message = sendPing(getNick(data),touser,msg)
 								if message != "Sent!":
-									send(message,getChannel(data))
+									send(message,getChannel(data),False,special,getNick(data))
+									if LOGLEVEL >= 1: log("Error sending ping: {}".format(message))
 									continue
-								send("ok i pinged {0} for you now pay me $1.".format(touser),getChannel(data))
+								if LOGLEVEL >= 1: log("Ping request sent from: {0}, to: {1}, with this message: {2}".format(getNick(data),touser,msg))
+								send("ok i pinged {0} for you now pay me $1.".format(touser),getChannel(data),False,special,getNick(data))
 				
 						# WIKIPEDIA
 						if (info[0].lower() in wiki_keywords) and WIKIPEDIA_ENABLED:
@@ -1617,10 +1774,10 @@ def main(joined):
 								if search != 0:
 									search = "".join(a for a in search if (a.isalnum() or a in (",",".","'","\"","?","!","@","#","$","%","^","&","*","(",")","_","+","=","-","\\","|","]","}","{","[",";",":","/",">","<","`","~"," ")))
 									time.sleep(1)
-									try:
-										send("see also: {0}".format(search),getChannel(data)) if special == 0 else privsend("see also: {0}".format(search),sender)
-									except:
-										pass
+#									try:
+#										send("see also: {0}".format(search),getChannel(data)) if special == 0 else privsend("see also: {0}".format(search),sender)
+#									except:
+#										pass
 								if LOGLEVEL >= 1: log("{0}\nMore Info: {1}\nSee Also: {2}".format(desc,url,search))
 						
 						# FIGHT
@@ -1936,7 +2093,7 @@ def main(joined):
 										fightsend("youre already fighting {0} and it's {1} turn.".format(alreadyFighting[0] if getNick(data) != alreadyFighting[0] else alreadyFighting[1],"their" if alreadyFighting[3] != getNick(data) else "your"))
 										con.db.rollback()
 										continue
-									except:	
+									except:
 										q.execute("""
 											INSERT INTO FightsOngoing (playerOne,playerTwo,accepted,whoseTurn,turnTotal,lastAction,stopper) VALUES (?, ?, 0, ?, 0, ?, ?) """, (fighter, challenger, challenger, time.time(), ''))
 										con.db.commit()
@@ -2336,7 +2493,7 @@ def main(joined):
 							# END FIGHT
 
 				# Below is the YouTube info method.
-				if YOUTUBE_LINKS:
+				if YOUTUBE_LINKS and action == 'PRIVMSG':
 					try:
 						youtube = re.findall(r'(https?://)?(www\.)?((youtube\.(com))/watch\?v=([-\w]+)|youtu\.be/([-\w]+))', getMessage(data))
 					except:
@@ -2353,7 +2510,7 @@ def main(joined):
 						send("that video is titled \"{0}\" and it is {1} in length. just fyi".format(vidinfo[0],vidinfo[1]),getChannel(data))
 
 				# Let's try to auto summarize some stuff
-				if NEWS_LINKS:
+				if NEWS_LINKS and action == 'PRIVMSG':
 					try:
 						newsSummary
 					except NameError:
@@ -2366,38 +2523,28 @@ def main(joined):
 						if not newsurl.startswith('http'):
 							newsurl = 'http://'+newsurl
 						try:
-							newsSummary,newsTitle,hashtags = whoHasTimeToRead(newsurl)
+							newsSummary,newsTitle,movies = whoHasTimeToRead(newsurl)
 						except Exception as e:
-							if str(e).lower() == "too many values to unpack":
-								err = whoHasTimeToRead(newsurl)
-								if err == "~~HTTPS~~":
-									send("ima try to summarize this article but they want me to use cookies so this might take a while plz b patient. pls.",getChannel(data))
-									try:
-										newsSummary,newsTitle,hashtags = readingIsFun(newsurl)
-									except Exception as e:
-										send("welp that site wouldnt let me read the news because it hates bots, so",getChannel(data))
-										if LOGLEVEL >= 1: log("Error getting news summary: {}".format(str(e)))
-										continue
 							try:
 								newsSummary
 							except NameError:
 								pass # Ignore name errors for now.
 							except Exception as e:
 								if LOGLEVEL >= 1: log("Summary error: {0}".format(str(e)))
+								send("idk how to read the words on this page",getChannel(data))
 								sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 								continue
 							else:
 								pass
-
 						try:
 							if newsSummary is not None:
 								if len(newsSummary) < SUMMARY_COUNT: continue
 								if LOGLEVEL >= 1: 
 									log("Found a news article!")
-									log("Title: {0}, Related Hashtags: {1}".format(newsTitle.encode('utf-8','ignore'),", ".join(hashtags).replace(".","")))
+									log("Title: {0}, Related video: {1}".format(newsTitle.encode('utf-8','ignore'),movies))
 									log("Summary: {0}".format(" ".join(newsSummary).translate(None, "\t\r\n")))
 									try:
-										send("title: \"{0}\". related hashtags: \"{1}\".  heres the jist:".format(newsTitle.lower().encode('utf-8','replace'),", ".join(hashtags).replace(".","")),getChannel(data))
+										send("title: \"{0}\". related video: {1}.  heres the jist:".format(newsTitle.lower().encode('utf-8','replace'),movies),getChannel(data))
 									except Exception as e:
 										if LOGLEVEL >= 1: log("Error in displaying article title: {}".format(str(e)))
 										send("something about the title of this article is anti-bot. send this site an email and tell them to use utf-8 encoding.",getChannel(data))
@@ -2419,7 +2566,7 @@ def main(joined):
 				#--
 				# Let's try to get a posted twitter status...
 				#--
-				if TWITTER_LINKS:
+				if TWITTER_LINKS and action == 'PRIVMSG':
                                         findurl=re.compile("https?:\/\/twitter\.com\/(?:#!\/)?(\w+)\/status(es)?\/(\d+)")
                                         for url in re.findall(findurl, data):
                                                 tid = url[2]
@@ -2478,48 +2625,62 @@ def main(joined):
 				# depending on where the user goes active.
 				#--
 				memnick = getNick(data) # Get the nickname of the person who last said something.
-				q = con.db.cursor()
-				q.execute("""
-					SELECT * FROM Memos WHERE toUser = ? """, (memnick,))
-				for tellMsg in q.fetchall():
-					try:
-						if getChannel(data) != fightchan:
-							send("{1} said >> tell {2} {3}".format(memnick,tellMsg[1],memnick,tellMsg[3]),getChannel(data),tell=True)
-						else:
-							fightsend("{1} said >> tell {2} {3}".format(memnick,tellMsg[1],memnick,tellMsg[3]),tell=True)
-						if LOGLEVEL >= 1: log("Told {0} {1}".format(memnick,tellMsg[3]))
-						q.execute("""
-							DELETE FROM Memos WHERE id = ? """, (tellMsg[0],))
-					except:
-						pass
-				con.db.commit()
+				if special == 0:
+					q = con.db.cursor()
+					q.execute("""
+						SELECT * FROM Memos WHERE toUser = ? """, (memnick,))
+					for tellMsg in q.fetchall():
+						try:
+							if getChannel(data) != fightchan:
+								send("{1} said >> tell {2} {3}".format(memnick,tellMsg[1],memnick,tellMsg[3].encode('utf-8','ignore')),getChannel(data),tell=True)
+							else:
+								fightsend("{1} said >> tell {2} {3}".format(memnick,tellMsg[1],memnick,tellMsg[3].encode('utf-8','ignore')),tell=True)
+							if LOGLEVEL >= 1: log("Told {0} {1}".format(memnick,tellMsg[3]))
+							q.execute("""
+								DELETE FROM Memos WHERE id = ? """, (tellMsg[0],))
+						except:
+							pass
+					con.db.commit()
 				#-- END MEMO
+
+				#--
+				# Check to see if we're live on Twitch
+				if getIsTwitchStreaming() == "Yes" and isStreaming == 0:
+					isStreaming = 1
+					for chan in channels:
+						send(twitchnotifmsg,chan)
+				if getIsTwitchStreaming() == "No" and isStreaming == 1:
+					isStreaming = 0
+					send("ok the live stream is over")
 
 				#--
 				# Let's log when the active user was last seen
 				if len(memnick) > 0 and memnick != botname:
-					q.execute("""
-						INSERT OR REPLACE INTO LastSeen(User,Time,Channel,Msg) VALUES (?, ?, ?, ?)""", (memnick, time.time(), getChannel(data), getMessage(data)))
-					con.db.commit()
+					if "." in memnick: continue
+					try:
+						q.execute("""
+							INSERT OR REPLACE INTO LastSeen(User,Time,Channel,Msg) VALUES (?, ?, ?, ?)""", (memnick, time.time(), getChannel(data), unicode(getMessage(data), encoding='utf8')))
+						con.db.commit()
+					except: continue
 
 				# Now let's see if someone wants a ping when someone else is alive in chat.
-			
 				q.execute("""
 					SELECT * FROM Pings WHERE checkUser = ? """, (memnick,))
 				for pingMsg in q.fetchall():
-						sendPing('Gr3yBot',pingMsg[2],"{0} is chatting it up in {1}".format(memnick,defchannel))
-						send("hey {0}, {1} told me to let them know when you start chatting. and i did.  so you have like 20 seconids to go idle again".format(memnick,pingMsg[2]),getChannel(data))
-						q.execute("""
-							DELETE FROM Pings WHERE id = ? """, (pingMsg[0],))
-						con.db.commit()
+						try:
+							sendPing('Gr3yBot',pingMsg[2],"{0} is chatting it up in {1}".format(memnick,defchannel))
+							if pingMsg[3] == 0: send("hey {0}, {1} told me to let them know when you start chatting. and i did.  so you have like 20 seconids to go idle again".format(memnick,pingMsg[2]),getChannel(data))
+							q.execute("""
+								DELETE FROM Pings WHERE id = ? """, (pingMsg[0],))
+							con.db.commit()
+						except Exception as e:
+							if LOGLEVEL >= 1: log("ERROR: Couldn't send ping: {}".format(str(e)))
+							continue
 						if LOGLEVEL >= 1: log("Triggering a ping: {0} wanted to know if {1} joined or unidled.".format(pingMsg[2],memnick))
 						continue
 	
 				# Finally, let's see if someone wants to correct themselves.
-				try:
-					info[0]
-					info = None
-				except:
+				if len(memnick) > 0 and memnick != botname:
 					searchReplace = re.compile("s/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])+)/((\\\\\\\\|(\\\\[^\\\\])|[^\\\\/])*)((/(.*))?)")
 					match = searchReplace.match(getMessage(data))
 				
@@ -2529,11 +2690,11 @@ def main(joined):
 						searchAndReplace(getNick(data), s, r, getChannel(data))
 					else:
 						chatter = getNick(data)
-			                        message = getMessage(data)
-			                        if (' ' in chatter) == False:
-			                                try:
-			                                        if len(message.rstrip()) > 0:
-		                                        	        addToSearchDb(chatter,message)
+				                message = getMessage(data)
+				                if (' ' in chatter) == False:
+				                	try:
+				                        	if len(message.rstrip()) > 0 and message[:1] != "s/":
+		                 		                	addToSearchDb(chatter,message)
 			                                except Exception as e:
 			                                        pass
 					
@@ -2570,7 +2731,6 @@ def main(joined):
 					except (Exception, tweepy.error.TweepError) as e:
 						if LOGLEVEL >= 1: log("Error with tweepy: {0}".format(str(e)))
 						if e.message[0]['code'] == 88:
-							print "rate limit: {0}".format(getRateLimit())
 							send("you guys are all farts",getChannel(data))
 						continue
 					try:
@@ -2590,7 +2750,7 @@ def main(joined):
 						if LOGLEVEL >= 1: log("Not Authorized")
 						continue
 					if len(mag) == 0:
-						send("huh i guess @{} never tweeted anything befote in their life ever".format(tweetnick),getChannel(data))
+						send("huh i guess @{} never tweeted anything befote in their life ever".format(fol),getChannel(data))
 						if LOGLEVEL >= 1: log("No tweets found!")
 						continue
 					for tweet in mag:

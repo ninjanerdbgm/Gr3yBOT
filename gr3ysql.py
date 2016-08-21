@@ -10,6 +10,7 @@ class Gr3ySQL(object):
 
 	def __init__(self):
 		self.db = sqlite3.connect(botname + '_db.db')
+		self.db.text_factory = str
 		self.init()
 
 	def init(self,checkEq=False):
@@ -180,7 +181,10 @@ class Gr3ySQL(object):
 			self.db.rollback()
 			raise e
 		finally:
-			if checkEq: self.checkEquipment()
+			try:
+				if checkEq: self.checkEquipment()
+			except:
+				self.db.rollback()
 			else: pass
 
 	def checkEquipment(self):

@@ -18,7 +18,7 @@ MAX_FILE_MEMO = 20000
 DATE_REGEX = r'([\./\-_]{0,1}(19|20)\d{2})[\./\-_]{0,1}(([0-3]{0,1}[0-9][\./\-_])|(\w{3,5}[\./\-_]))([0-3]{0,1}[0-9][\./\-]{0,1})?'
 
 ALLOWED_TYPES = ['html', 'htm', 'md', 'rst', 'aspx', 'jsp', 'rhtml', 'cgi',
-                'xhtml', 'jhtml', 'asp']
+                'xhtml', 'jhtml', 'asp', 'shtml']
 
 GOOD_PATHS = ['story', 'article', 'feature', 'featured', 'slides',
               'slideshow', 'gallery', 'news', 'video', 'media',
@@ -27,6 +27,8 @@ GOOD_PATHS = ['story', 'article', 'feature', 'featured', 'slides',
 BAD_CHUNKS = ['careers', 'contact', 'about', 'faq', 'terms', 'privacy',
               'advert', 'preferences', 'feedback', 'info', 'browse', 'howto',
               'account', 'subscribe', 'donate', 'shop', 'admin']
+
+GOOD_DOMAINS = ['ipsos-na', 'rt']
 
 BAD_DOMAINS = ['amazon', 'doubleclick', 'twitter', 'github', 'reddit']
 
@@ -224,6 +226,11 @@ def valid_url(url, verbose=False, test=False):
         if GOOD.lower() in [p.lower() for p in path_chunks]:
             if verbose: print('%s verified for good path' % url)
             return True
+
+    # if it's in the domain whitelist, pass it through
+    if tld in GOOD_DOMAINS:
+	if verbose: print('%s is verified in the whitelist' % url)
+	return True
 
     if verbose: print('%s caught for default false' % url)
     return False
