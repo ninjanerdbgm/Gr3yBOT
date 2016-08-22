@@ -180,13 +180,11 @@ def addToSearchDb(nick,msg):
 		q.rollback()
 
 def pingAll(fromuser, msg):
-	print "pingall reached"
 	q = con.db.cursor()
 	try:
 		q.execute(""" SELECT * FROM TelegramIDs """)
 		n = q.fetchall()
 		for pinger in n:
-			print pinger
 			sendPing(fromuser,pinger[0],msg)
 	except:
 		if LOGLEVEL >= 2: log("Couldn't send ping to everyone.")
@@ -323,7 +321,7 @@ def sendPing(fromuser, touser, msg):
 		pinger.sendPing(fromuser,touser,msg)
 		return "Sent!"
 	except:
-		return "Error"
+		return "i couldnt find you in the ping list. try doing the /addme command again"
 	
 
 def getMessage(data):
@@ -758,12 +756,13 @@ def main(joined):
 							host = getHost(data)
 							status = admins(nick, host)
 							try:
-								msg = info[1].translate(None, "\t\r\n")
+								msg = " ".join(info[1:]).translate(None, "\t\r\n")
 							except:
 								send("what are you announcing idiot",getChannel(data))
 								continue
 							if status == 1:
 								try:
+									send("ok i did a real good announcement.",getChannel(data))
 									pingAll("The Greynoise Podcast",msg)
 									if LOGLEVEL >= 1: log("{0} made an announcement.".format(nick))
 								except:
@@ -1272,7 +1271,7 @@ def main(joined):
 							if len(info) > 1 and info[1].strip('\r\n').lower() == 'ping' and TELEGRAM_ENABLED:
 								privsend("%ping <user> <message>",name)
 								privsend("this sends a message to a specified user via telegram. telegram will notify a users phone when it receives a message.",name)
-								privsend("if you want to be able to be pinged, download the telegram app on your phone and send \"/addme {0}\" to @gr3ybot.",name)
+								privsend("if you want to be able to be pinged, download the telegram app on your phone and send \"/addme {0}\" to @gr3ybot.".format(getNick(data)),name)
 								privsend("----------------------",name)
 								privsend("<user> - someone in chat.",name)
 								privsend("<message> - optional. can be any message.",name)
@@ -1664,6 +1663,12 @@ def main(joined):
 							touser = touser.translate(None, "\t\r\n")
 							if touser.lower() == "me":
 								touser = getNick(data)
+							q = con.db.cursor()
+							q.execute(""" SELECT * FROM TelegramIDs WHERE ircUser = ? """, (touser,))
+							n = q.fetchall()
+							if len(n) == 0: 
+								send("that user didnt set up no pings yet.  yell at them when they come back.",getChannel(data))
+								continue
 							if special == 1:
 								for thing in info[2:]:						
 									if thing[0] == "#":
