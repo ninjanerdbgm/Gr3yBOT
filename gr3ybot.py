@@ -52,13 +52,13 @@ if URBANDICT_ENABLED: from urbandict import *
 if GOOGLE_ENABLED: from googlebot import *
 if TWITTER_ENABLED: from twitbot import *
 if TWITCH_NOTIFICATIONS_ENABLED: from twitchbot import getIsTwitchStreaming
-if SLACK_ENABLED: from slackbot import *
 if YELP_ENABLED: from yelpbot import *
 if WEATHER_ENABLED: from weatherbot import *
 if NEWS_LINKS: from summarize import *
 if WIKIPEDIA_ENABLED: from wiki import wiki
 if QR_ENABLED: import qrtools
 if WOLFRAM_ENABLED: from wolfbot import *
+if TELEGRAM_ENABLED: from telebot import Pinger
 
 #-- Version, and AI initialization, and variables
 random.seed()
@@ -72,6 +72,8 @@ botAI = AI.create(ChatterBotType.CLEVERBOT)
 convo = botAI.create_session()
 dbInit = Gr3ySQL().init(checkEq=True)
 con = Gr3ySQL()
+pinger = Pinger()
+pinger.bot.message_loop(pinger.addNewUser)
 
 andcount = 0 #for gimli
 creepfactor = 0 #for creep
@@ -177,6 +179,18 @@ def addToSearchDb(nick,msg):
 		if LOGLEVEL >= 1: log("ERROR: Cannot fetch last {0} user messages: {1}".format(MSG_HISTORY, str(e)))
 		q.rollback()
 
+def pingAll(fromuser, msg):
+	print "pingall reached"
+	q = con.db.cursor()
+	try:
+		q.execute(""" SELECT * FROM TelegramIDs """)
+		n = q.fetchall()
+		for pinger in n:
+			print pinger
+			sendPing(fromuser,pinger[0],msg)
+	except:
+		if LOGLEVEL >= 2: log("Couldn't send ping to everyone.")
+
 def admins(nick, host):
 	if LOGLEVEL >= 1: log("Call for an admin check.  Is {} an admin?".format(host))
 	rawbuff = ""
@@ -249,7 +263,7 @@ def getChatters(rawdata="",chan=channel):
 					log(i)
 	if names == False or names is None:
 		return "lonely"
-	if len(names) == 1:
+	if len(names) == 0:
 		return "lonely"
 	return names
 
@@ -303,6 +317,13 @@ def bufferData(data):
 	if "\r" not in data or "\n" not in data: return False
 	data = data[:data.index("\r\n")+len("\r\n")]
 	return data
+	
+def sendPing(fromuser, touser, msg):
+	try:
+		pinger.sendPing(fromuser,touser,msg)
+		return "Sent!"
+	except:
+		return "Error"
 	
 
 def getMessage(data):
@@ -460,7 +481,7 @@ def checkReminders(chan=channel):
 	for row in q:
 		send("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),chan)
                 privsend("hey {0}, heres a reminder for you: {1}".format(row[1],row[3]),row[1])
-                sendPing("Gr3yBot","{}".format(row[1]),"heres your reminder: {0}".format(row[3]))
+                sendPing("GreyBot","{}".format(row[1]),"heres your reminder: {0}".format(row[3]))
                 q.execute("""
 			INSERT INTO Memos (fromUser, toUser, message, dateTime) VALUES (?, ?, ?, ?) """, (botname, row[1], row[3], time.time()))
 		q.execute("""
@@ -499,12 +520,13 @@ def main(joined):
 					# Reply to PING
 					if raw[0:4] == 'PING':
 						try:
+							if LOGLEVEL >= 1: log("Receiving a PING.")
 							lastPing = time.time()
 							tellinghistory = 0
 							time.sleep(1)
 							irc.send('PONG ' + raw.split()[1] + '\r\n')
 							dataRetries = 3
-							if LOGLEVEL >= 1: log("Sent a ping response.")
+							if LOGLEVEL >= 1: log("Sent a PONG: 'PONG {}\\r\\n'".format(raw.split()[1]))
 							pingActions(getChannel(raw))
 						except Exception as e:
 							if LOGLEVEL >= 1: log("Couldn't send PONG response: {}".format(str(e)))
@@ -729,6 +751,30 @@ def main(joined):
 							else:
 								send("no",getChannel(data))
 								continue
+
+						# ANNOUNCE (MUST HAVE TELEGRAM ENABLED)
+						if TELEGRAM_ENABLED and (info[0].lower() in ('announce','tellall','pingall')) and special == 0:
+							nick = getNick(data)
+							host = getHost(data)
+							status = admins(nick, host)
+							try:
+								msg = info[1].translate(None, "\t\r\n")
+							except:
+								send("what are you announcing idiot",getChannel(data))
+								continue
+							if status == 1:
+								try:
+									pingAll("The Greynoise Podcast",msg)
+									if LOGLEVEL >= 1: log("{0} made an announcement.".format(nick))
+								except:
+									send("announcements might be broken",getChannel(data))
+									continue
+							elif status == 2:
+								send("i mean, you look like an admin but can you identify like an admin",getChannel(data))
+                                                                continue
+                                                        else:
+                                                                send("you dont know what youre talking about",getChannel(data))
+                                                                continue
 
 						#--
 						# DEOP COMMAND
@@ -1192,7 +1238,7 @@ def main(joined):
 								privsend("%topic <topic> -=- allows you to change the <topic>.  only works if youre a podcaster.", name)
 								time.sleep(.5)
 								privsend("%tell <nick> <message> -=- stores a <message> for <nick> and sends it to them when they become active again.", name)
-								if PING_ENABLED: privsend("%ping <nick> <message> -=- send a message to <nick> via slacker.  this should ping their phone.  message is optional.  want to be able to be pinged? type %help ping", name)
+								if TELEGRAM_ENABLED: privsend("%ping <nick> <message> -=- send a message to <nick> via telegram.  this should ping their phone.  message is optional.  want to be able to be pinged? type %help ping", name)
 								privsend("%remindme <timeframe> - <message> -=- remind yourself to do something in the future. %help reminders for more info", name)
 								time.sleep(.5)
 								if TWITTER_ENABLED: privsend("%tweet <message> -=- make   send a tweet containing <message>.", name)
@@ -1223,13 +1269,12 @@ def main(joined):
 								privsend("%version -=- displays current bot version.", name)
 								privsend("{0}: <message> -=- chat with {1}! this is tied into cleverbot".format(botname,botname), name)
 								if LOGLEVEL >= 1: log("Sent help to {0}".format(name))
-							if len(info) > 1 and info[1].strip('\r\n').lower() == 'ping' and PING_ENABLED:
+							if len(info) > 1 and info[1].strip('\r\n').lower() == 'ping' and TELEGRAM_ENABLED:
 								privsend("%ping <user> <message>",name)
-								privsend("this sends a message to a specified user via slack. slack will notify a users phone when it receives a message.",name)
-								privsend("if you want to be able to be pinged, let bgm know, along with your email address, and hell send you an invite.",name)
-								privsend("already sent bgm your email?  Type %slack add <YOUR_SLACK_USERNAME> to set your slack username.",name)
+								privsend("this sends a message to a specified user via telegram. telegram will notify a users phone when it receives a message.",name)
+								privsend("if you want to be able to be pinged, download the telegram app on your phone and send \"/addme {0}\" to @gr3ybot.",name)
 								privsend("----------------------",name)
-								privsend("<user> - can be any slack username or someone in chat.",name)
+								privsend("<user> - someone in chat.",name)
 								privsend("<message> - optional. can be any message.",name)
 								privsend("----------------------",name)
 								privsend("PING SELF COMMANDS AND REMINDERS",name)
@@ -1250,9 +1295,9 @@ def main(joined):
 								privsend("----------------------",name)
 							if len(info) > 1 and info[1].strip('\r\n').lower() == 'reminders':
 								privsend("%remindme/%remind me <timeframe> - <message>",name)
-								privsend("set yourself a reminder for some time	to do something. when the time comes, youll be notified in here 3 different ways, and if you have a slack",name)
-								privsend("account, it will send you a notification to your phone. due to the way irc sockets are handled, the reminder may be off by a minute or two, so",name)
-								privsend("dont use it as a cooking timer unless you mind a few minutes extra cooking. ask bgm how to get a slack account if youre interested.",name)
+								privsend("set yourself a reminder for some time	to do something. when the time comes, youll be notified in here 3 different ways, and if you have pings",name)
+								privsend("enabled, it will send you a notification to your phone. due to the way irc sockets are handled, the reminder may be off by a minute or two, so",name)
+								privsend("dont use it as a cooking timer unless you mind a few minutes extra cooking. check out how to set up pings if youre interested in this.",name)
 								privsend("----------------------",name)
 								privsend("<timeframe> - make it plain english. examples: %remindme in five minutes, %remindme on the second tuesday of march, %remindme 9/1/16, etc",name)
 								privsend("<message> - message is required, and must be separated from the <timeframe> by a single dash (-).",name)
@@ -1421,7 +1466,7 @@ def main(joined):
 									fol = getRandomFollower() # Check twitbot.py for this and other twitter functions
 								except (Exception, tweepy.error.TweepError) as e:
 									if LOGLEVEL >= 1: log("Tweepy error: {0}".format(str(e)))
-									sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+									#sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 									if e.message[0]['code'] == 88:
 										send("im making too many calls to twitter and the twitter hates when i do that.  try again later.",getChannel(data))
 									continue
@@ -1584,32 +1629,6 @@ def main(joined):
 								if special == 0: send("k reminder set for {0}".format(reminddate.strftime("%m/%d/%y %H:%M:%S")),getChannel(data))
 								else: usernick = getNick(data); privsend("k reminder set for {0}".format(reminddate.strftime("%m/%d/%y %H:%M:%S")),usernick)
 
-						# SLACK COMMANDS
-						if (info[0].lower() == 'slack' and PING_ENABLED):
-							if len("".join(info[3:])) == 0:
-								if info[1].lower() == 'add':
-									user = getNick(data)
-									alias = info[2]
-									alias = alias.translate(None, "\t\r\n")
-									alias = alias.strip('@')
-									if not findSlacker(alias):
-										send("um youre not on the slackers list.  better send bgm your email address so he can add you.",getChannel(data))
-										continue
-									q = con.db.cursor()
-									q.execute("""
-										SELECT * FROM SlackAliases WHERE ircUser = ? """, (user,))
-									testUser = q.fetchone()
-									try:
-										send("your slack name has already been added to the list.")
-										testUser[0]
-									except:
-										q.execute("""
-											INSERT INTO SlackAliases (ircUser, slackUser) VALUES (?, ?) """, (user, alias))
-										con.db.commit()
-										send("ok ive added you to thelist",getChannel(data))
-							else:
-								send("im pretty sure your slack username is supposed to be one word",getChannel(data))
-
 						# LAST SEEN
 						if (info[0].lower() == 'seen'):
 							actChan = getChannel(data)
@@ -1635,7 +1654,7 @@ def main(joined):
 								continue
 	
 						# PING
-						if info[0].lower() == 'ping' and PING_ENABLED:
+						if info[0].lower() == 'ping' and TELEGRAM_ENABLED:
 							try:
 								touser = info[1]
 							except:
@@ -1849,7 +1868,7 @@ def main(joined):
                                                                         continue
 							except Exception as e:
 								fightsend("i decided not to work today. i just let bgm know how lazy i am.")
-								sendPing("Gr3yBot","bgm",'Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+								#sendPing("Gr3yBot","bgm",'Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 								continue
 
 							if act[0].lower() == "help":
@@ -2532,7 +2551,7 @@ def main(joined):
 							except Exception as e:
 								if LOGLEVEL >= 1: log("Summary error: {0}".format(str(e)))
 								send("idk how to read the words on this page",getChannel(data))
-								sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
+								#sendPing('Gr3yBot','bgm','Gr3ybot Error.  Check logs for more info: {0}'.format(str(e)))
 								continue
 							else:
 								pass
@@ -2625,7 +2644,7 @@ def main(joined):
 				# depending on where the user goes active.
 				#--
 				memnick = getNick(data) # Get the nickname of the person who last said something.
-				if special == 0:
+				if special == 0 and action != "JOIN":
 					q = con.db.cursor()
 					q.execute("""
 						SELECT * FROM Memos WHERE toUser = ? """, (memnick,))
@@ -2646,12 +2665,16 @@ def main(joined):
 				#--
 				# Check to see if we're live on Twitch
 				if getIsTwitchStreaming() == "Yes" and isStreaming == 0:
+					if LOGLEVEL >= 1: log("We're live on twitch.  Notifying chat...")
 					isStreaming = 1
 					for chan in channels:
 						send(twitchnotifmsg,chan)
+					pingAll("The Greynoise Podcast","The Greynoise Podcast has gone live on Twitch!  Visit https://greynoi.se/live to watch!")
 				if getIsTwitchStreaming() == "No" and isStreaming == 1:
+					if LOGLEVEL >= 1: log("Live stream over.  Notifying chat...")
 					isStreaming = 0
-					send("ok the live stream is over")
+					for chan in channels:
+						send("ok the live stream is over", chan)
 
 				#--
 				# Let's log when the active user was last seen
@@ -2668,7 +2691,7 @@ def main(joined):
 					SELECT * FROM Pings WHERE checkUser = ? """, (memnick,))
 				for pingMsg in q.fetchall():
 						try:
-							sendPing('Gr3yBot',pingMsg[2],"{0} is chatting it up in {1}".format(memnick,defchannel))
+							sendPing('GreyBot',pingMsg[2],"{0} is chatting it up in {1}".format(memnick,defchannel))
 							if pingMsg[3] == 0: send("hey {0}, {1} told me to let them know when you start chatting. and i did.  so you have like 20 seconids to go idle again".format(memnick,pingMsg[2]),getChannel(data))
 							q.execute("""
 								DELETE FROM Pings WHERE id = ? """, (pingMsg[0],))
@@ -2827,6 +2850,23 @@ def main(joined):
 						send("d-k.  donkey kong.",getChannel(data))
 						time.sleep(.5)
 						send("d-k.  DONKEYKONGISHERE.",getChannel(data))
+
+		if pinger.tgGetMessage()[0] is not None and pinger.tgGetMessage()[1] is not None:
+			tgUser = pinger.tgGetMessage()[0]
+			tgId = pinger.tgGetMessage()[1]
+			pinger.fromuser = None
+			pinger.fromid = None
+			pingerFound = "No"
+			if LOGLEVEL >= 1: log("Request to add {0} to Telegram list.".format(tgUser))
+			for c in channels:
+				chatusers = getChatters(chan=c)
+				for k in chatusers:
+					if tgUser == k:
+						pinger.userToDb(tgUser, tgId)
+						pingerFound = "Yes"
+						break
+				if pingerFound == "Yes": break
+						
 
 #-- Make sure this is the main script
 if __name__ == '__main__':

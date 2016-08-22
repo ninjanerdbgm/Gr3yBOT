@@ -3,7 +3,7 @@
 # This is mostly used for fighting for now.  I may come up with
 # other things this could be used for later on down the road.
 
-from gr3ybot_settings import botname, SLACK_ENABLED, TWITTER_ENABLED
+from gr3ybot_settings import botname, TWITTER_ENABLED, TELEGRAM_ENABLED
 import sqlite3
 
 class Gr3ySQL(object):
@@ -146,7 +146,7 @@ class Gr3ySQL(object):
 	                """)
 		
 			# Pings
-			if SLACK_ENABLED:
+			if TELEGRAM_ENABLED:
 				create.execute("""
 						CREATE TABLE IF NOT EXISTS
 							Pings (
@@ -156,15 +156,15 @@ class Gr3ySQL(object):
 							)
 				""")
 	
-			# Slack Aliases
-			if SLACK_ENABLED:
-				create.execute("""
-		                                CREATE TABLE IF NOT EXISTS
-		                                        SlackAliases (
-		                                                ircUser VARCHAR(12) PRIMARY KEY,
-		                                                slackUser VARCHAR(12)
-		                                        )
-		                """)
+			# Telegram IDs
+                        if TELEGRAM_ENABLED:
+                                create.execute("""
+                                                CREATE TABLE IF NOT EXISTS
+                                                        TelegramIDs (
+                                                                ircUser VARCHAR(12) PRIMARY KEY,
+								telegramId INTEGER
+                                                        )
+                                """)
 	
 			# Twitter IDs
 			if TWITTER_ENABLED:

@@ -15,7 +15,7 @@ timeformat = "%m/%d/%y %H:%M:%S"
 server = ''
 port = 6667
 channelpw = ''
-botname = 'GreyBot_BETAR' if BETA_MODE else 'GreyBot' 
+botname = 'GreyBot_BETA' if BETA_MODE else 'GreyBot' 
 version = "1.98. Version Name: Skateboard Punk"
 
 # Set channels to join.  The first channel will be
@@ -26,19 +26,17 @@ version = "1.98. Version Name: Skateboard Punk"
 if BETA_MODE:
 	channels = [
 		# Beta channels here...
-		'#+BETAR'
+		'#BETA'
 	]
 else:
 	channels = [
 		# Regular channels here...
-		'#pub',
-		'#starwars'
+		'#pub'
 	]
 
 ## Define Podcast Hosts Here
 ADMINLIST = [
-	'your_username',
-	]
+]
 	
 ### password is really only necessary if your bot is registered.
 ### But I recommend registering the bot's nick as well as giving it auto-ops 
@@ -48,8 +46,6 @@ password = ''
 ### server_slug is the text that appears when you connect to your server.
 ### This is used to determine when the bot joins the channels.
 server_slug = ''
-
-
 
 #-- Please configure these logging variables:
 #       LOGFILE
@@ -105,21 +101,20 @@ FIGHTLOG = 'fightinfo.log'
 #	*_ENABLED
 #		Enable or disable the bot's various features.
 #		If you don't have developer API keys for Yelp, YouTube,
-YOUTUBE_LINKS = True
-NEWS_LINKS = True
+YOUTUBE_LINKS = False
+NEWS_LINKS = False
 SUMMARY_COUNT = 3
-TWITTER_LINKS = True
-TWITTER_ENABLED = True
-TWITCH_NOTIFICATIONS_ENABLED = True
-YELP_ENABLED = True
-PING_ENABLED = True
-GOOGLE_ENABLED = True
-URBANDICT_ENABLED = True
-WIKIPEDIA_ENABLED = True
-WEATHER_ENABLED = True
-WOLFRAM_ENABLED = True
-QR_ENABLED = True
-SLACK_ENABLED = True
+TWITTER_LINKS = False
+TWITTER_ENABLED = False
+TWITCH_NOTIFICATIONS_ENABLED = False
+YELP_ENABLED = False
+GOOGLE_ENABLED = False
+URBANDICT_ENABLED = False
+WIKIPEDIA_ENABLED = False
+WEATHER_ENABLED = False
+WOLFRAM_ENABLED = False
+QR_ENABLED = False
+TELEGRAM_ENABLED = False
 #--
 
 # Fight Settings:
@@ -199,11 +194,11 @@ reminder_keywords = [
 	"remind"
 	]
 
-# Slacker
-#	API TOKEN:
-#		You can get an api token from here: https://api.slack.com/web#authentication
-#		Scroll down to Authentication.
-SLACK_API_TOKEN = ''
+# Telebot
+#       API TOKEN:
+#               You can get an api token from here: https://core.telegram.org/bots
+#               Scroll down to BotFather.
+TELEGRAM_API_TOKEN = ''
 
 # Twitter						
 #-----------------------------------------------------------------------------------------------#	
@@ -314,6 +309,8 @@ affirmative = ["yes","ya","y","yep","sure","ok","sounds good","fine","uh huh","y
 if CONFIGURED:
 	channel = channels[0]
 	print("\n==========")
+	if BETA_MODE: print("BETA MODE ENABLED")
+	print(" ")
 	print("Validating configuration.  Please wait...\n")
 	time.sleep(1)
         if FIGHT_HISTORY and len(PASTEBIN_DEV_KEY) < 5:
@@ -332,11 +329,11 @@ if CONFIGURED:
                 else:
                         print("Script misconfiguration.  Exiting now...")
                         sys.exit()
-	if SLACK_ENABLED and len(SLACK_API_TOKEN) < 5:
-                print("You've enabled Slack integration, but didn't supply a valid Slack API dev key.")
-                print("Do you want to disable Slack integration?")
+	if TELEGRAM_ENABLED and len(TELEGRAM_API_TOKEN) < 5:
+                print("You've enabled Telegram notifications, but didn't supply a valid Telegram API dev key.")
+                print("Do you want to disable Telegram?")
                 if raw_input().lower() in affirmative:
-                        SLACK_ENABLED = False
+                        TELEGRAM_ENABLED = False
                 else:
                         print("Script misconfiguration.  Exiting now...")
                         sys.exit()
@@ -372,14 +369,6 @@ if CONFIGURED:
                 else:
                         print("Script misconfiguration.  Exiting now...")
                         sys.exit()
-	if PING_ENABLED and len(SLACK_API_TOKEN) < 5:
-		print("You've enabled Ping functionality, but didn't supply a valid Slack API token.")
-                print("Do you want to disable Ping functionality?")
-		if raw_input().lower() in affirmative:
-                        PING_ENABLED = False
-                else:
-                        print("Script misconfiguration.  Exiting now...")
-                        sys.exit()
 	if WOLFRAM_ENABLED and len(WOLFRAM_KEY) < 5:
 		print("You've enabled Wolfram Alpha functionality, but didn't supply a valid Wolfram Alpha key.")
 		print("Do you want to disable Wolfram functionality?")
@@ -388,7 +377,7 @@ if CONFIGURED:
 		else:
 			print("Script misconfiguration.  Exiting now...")
 			sys.exit()
-	
+	print(" ")	
 	print("Checking dependencies...")
 	if YOUTUBE_LINKS:
 		print("Checking YouTube dependencies...")
@@ -441,16 +430,16 @@ if CONFIGURED:
                         print("Halting system.")
                         sys.exit()
 		print("Done")
-	if SLACK_ENABLED:
-		print("Checking Slack dependencies...")
-		try:
-                        import slacker
-                        print("Checking slacker... OK")
+	if TELEGRAM_ENABLED:
+                print("Checking Telegram dependencies...")
+                try:
+                        import telepot
+                        print("Checking telepot... OK")
                 except:
-                        print("Checking slacker... FAIL")
+                        print("Checking telepot... FAIL")
                         print("Halting system.")
                         sys.exit()
-		print("Done")
+                print("Done")
 	if NEWS_LINKS:
 		print("Checking News Summarization dependencies...")
 		try:
@@ -538,11 +527,11 @@ if CONFIGURED:
                 print("Checking signal... FAIL")
                 print("Halting system.")
                 sys.exit()
-
+	print(" ")
 	print("Current settings:")
 	print("Fight History: {0}\nYouTube Links: {1}\nTwitter functions: {2}\nNews Links: {3}".format(FIGHT_HISTORY,YOUTUBE_LINKS,TWITTER_ENABLED,NEWS_LINKS))
-	print("Yelp: {0}\nPing: {1}\nWolfram Alpha: {4}\nUrban Dictionary: {2}\nWikipedia: {3}".format(YELP_ENABLED,PING_ENABLED,URBANDICT_ENABLED,WIKIPEDIA_ENABLED,WOLFRAM_ENABLED))
-	print("Twitch Notifications: {2}\nSlack integration: {0}\nWeather: {1}".format(TWITCH_NOTIFICATIONS_ENABLED,SLACK_ENABLED,WEATHER_ENABLED))
+	print("Yelp: {0}\nnWolfram Alpha: {3}\nUrban Dictionary: {1}\nWikipedia: {2}".format(YELP_ENABLED,URBANDICT_ENABLED,WIKIPEDIA_ENABLED,WOLFRAM_ENABLED))
+	print("Twitch Notifications: {0}\nWeather: {1}\nTelegram: {2}".format(TWITCH_NOTIFICATIONS_ENABLED,WEATHER_ENABLED,TELEGRAM_ENABLED))
 	if raw_input("\nIs this look okay? (y/n): ").lower() in affirmative:
 		pass
         else:
